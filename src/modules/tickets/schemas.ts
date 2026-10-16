@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "../../lib/zod.js";
 import { paginationQuery } from "../../lib/pagination.js";
 import { priorities, ticketStatuses } from "../../db/schema.js";
 

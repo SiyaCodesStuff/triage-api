@@ -79,3 +79,9 @@ The response is `{ "data": [], "meta": { "page": 1, "pageSize": 20, "total": 0, 
 ## Decisions and trade-offs
 
 Rate-limit counters are stored in process memory, so limits reset on restart and are enforced per instance rather than globally. Running multiple replicas requires a shared store, for example Redis via `rate-limit-redis`. Adding a shared store is planned for when the app is scaled out.
+
+## OpenAPI generation
+
+The OpenAPI 3.1 document is generated at startup by the installed Zod-to-OpenAPI generator. Request bodies, path/query parameters and validation bounds come from the runtime Zod validators; public response schemas, error envelopes, cookies, CSRF and authentication requirements are registered in `src/config/openapi.ts` and `src/config/openapi-schemas.ts`. Business paths use `/api/v1`; operational paths override the server to `/`. UI/spec endpoints retain `ENABLE_DOCS` gating. Swagger vendor assets are documented under `/docs/{assetPath}`; Express's implicit HEAD and CORS preflight handling are described in the document.
+
+The OpenAPI test inspects Express router registrations and mount paths, checks method/path coverage, and proves a newly registered undocumented route is detected. It also checks local references, security schemes and request/response schema coverage. Add a spec registration and response schema whenever adding a route.

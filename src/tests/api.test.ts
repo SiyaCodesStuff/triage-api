@@ -57,6 +57,11 @@ describe("triage-api request handling", () => {
     expect(response.body.servers).toEqual([{ url: "/api/v1" }]);
     expect(Object.keys(response.body.paths).sort()).toEqual(
       [
+        "/health",
+        "/ready",
+        "/docs",
+        "/docs/{assetPath}",
+        "/openapi.json",
         "/auth/login",
         "/auth/logout",
         "/auth/refresh",
@@ -74,12 +79,14 @@ describe("triage-api request handling", () => {
   });
 
   it("documents the CSRF header for every state-changing OpenAPI operation", () => {
-    expect(openApiDocument.components.parameters.csrfProtection).toMatchObject({
-      name: "X-CSRF-Protection",
-      in: "header",
-      required: true,
-      schema: { enum: ["1"] },
-    });
+    expect(openApiDocument.components.parameters?.csrfProtection).toMatchObject(
+      {
+        name: "X-CSRF-Protection",
+        in: "header",
+        required: true,
+        schema: { enum: ["1"] },
+      },
+    );
     for (const path of Object.values(openApiDocument.paths)) {
       for (const [method, operation] of Object.entries(path)) {
         if (["post", "patch", "delete", "put"].includes(method)) {

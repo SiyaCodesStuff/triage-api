@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "../../lib/zod.js";
 import { roles } from "../../db/schema.js";
 
 export const emptyQuery = z.strictObject({});
