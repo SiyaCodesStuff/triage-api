@@ -50,6 +50,20 @@ app.use(
   }),
 );
 app.use(cors({ origin: env.CORS_ORIGINS ?? false, credentials: true }));
+app.get("/health", (_request, response) => {
+  response.json({ data: { status: "ok" } });
+});
+app.get("/ready", async (_request, response) => {
+  try {
+    await pool.query("SELECT 1");
+    response.json({ data: { status: "ready" } });
+  } catch {
+    response.status(503).json({
+      error: { code: "NOT_READY", message: "The database is not available" },
+    });
+  }
+});
+
 app.use(
   rateLimit({
     windowMs: 60_000,
@@ -59,28 +73,6 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "16kb", strict: true }));
-
-app.get(
-  "/health",
-  validateRequest(noRequestDataSchema),
-  (_request, response) => {
-    response.json({ data: { status: "ok" } });
-  },
-);
-app.get(
-  "/ready",
-  validateRequest(noRequestDataSchema),
-  async (_request, response) => {
-    try {
-      await pool.query("SELECT 1");
-      response.json({ data: { status: "ready" } });
-    } catch {
-      response.status(503).json({
-        error: { code: "NOT_READY", message: "The database is not available" },
-      });
-    }
-  },
-);
 
 app.get(
   "/openapi.json",

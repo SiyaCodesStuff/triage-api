@@ -31,6 +31,26 @@ describe("triage-api request handling", () => {
     expect(docsUi.text).toContain("swagger-ui");
   });
 
+  it("ignores query strings on the health route", async () => {
+    const health = await request(app).get("/health?x=1");
+    expect(health.status).toBe(200);
+    expect(health.body).toEqual({ data: { status: "ok" } });
+  });
+
+  it("does not count health requests against the rate limit", async () => {
+    const before = await request(app).get("/openapi.json");
+    const health = await request(app).get("/health");
+    const after = await request(app).get("/openapi.json");
+
+    expect(health.status).toBe(200);
+    expect(health.headers.ratelimit).toBeUndefined();
+    const remaining = (header: string) => Number(/r=(\d+)/.exec(header)?.[1]);
+    expect(remaining(before.headers.ratelimit)).toBeGreaterThan(0);
+    expect(remaining(after.headers.ratelimit)).toBe(
+      remaining(before.headers.ratelimit) - 1,
+    );
+  });
+
   it("returns consistent errors for missing auth and malformed request data", async () => {
     const unauthenticated = await request(app).get("/api/tickets");
     expect(unauthenticated.status).toBe(401);
