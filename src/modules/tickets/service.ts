@@ -14,7 +14,7 @@ import { badRequest, forbidden, notFound } from "../../lib/app-error.js";
 export type Actor = { id: string; role: Role };
 export type TicketRecord = typeof tickets.$inferSelect;
 
-function assertCanRead(ticket: TicketRecord, actor: Actor): void {
+export function assertCanRead(ticket: TicketRecord, actor: Actor): void {
   if (actor.role === "USER" && ticket.createdBy !== actor.id) {
     throw notFound("Ticket was not found");
   }
