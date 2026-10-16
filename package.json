@@ -1,0 +1,74 @@
+{
+  "name": "triage-api",
+  "version": "0.1.0",
+  "description": "A support-ticket REST API built with Express, TypeScript, PostgreSQL, and Drizzle ORM.",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env ./node_modules/tsx/dist/cli.mjs watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node --env-file-if-exists=.env dist/server.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.drizzle.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "node --env-file-if-exists=.env ./node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",
+    "format": "prettier --write .",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:generate": "node --env-file-if-exists=.env ./node_modules/drizzle-kit/bin.cjs generate",
+    "db:migrate": "node --env-file-if-exists=.env ./node_modules/tsx/dist/cli.mjs src/db/migrate.ts",
+    "db:migrate:test": "node --env-file-if-exists=.env ./node_modules/tsx/dist/cli.mjs src/db/migrate-test.ts",
+    "db:studio": "node --env-file-if-exists=.env ./node_modules/drizzle-kit/bin.cjs studio"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SiyaCodesStuff/triage-api.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/SiyaCodesStuff/triage-api/issues"
+  },
+  "homepage": "https://github.com/SiyaCodesStuff/triage-api#readme",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^9.1.0",
+    "argon2": "^0.45.1",
+    "cors": "^2.8.6",
+    "drizzle-orm": "^0.45.4",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.1",
+    "pino": "^10.4.0",
+    "pino-http": "^11.0.0",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "@types/swagger-ui-express": "^4.1.8",
+    "@vitest/coverage-v8": "^5.0.4",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "pino-pretty": "^13.2.0",
+    "prettier": "^3.9.10",
+    "supertest": "^7.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.4"
+  }
+}
