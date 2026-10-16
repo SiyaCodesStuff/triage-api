@@ -14,7 +14,14 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],
-      exclude: ["src/tests/**", "src/**/*.d.ts"],
+      // Thin process entrypoints are exercised by CI (migrations) and by running the server.
+      exclude: [
+        "src/tests/**",
+        "src/**/*.d.ts",
+        "src/server.ts",
+        "src/db/migrate.ts",
+        "src/db/migrate-test.ts",
+      ],
       reporter: ["text", "json-summary", "html"],
       thresholds: { lines: 80 },
     },
