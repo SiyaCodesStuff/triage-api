@@ -239,14 +239,70 @@ export const openApiDocument = {
     "/tickets/{ticketId}/comments": {
       get: {
         summary: "List ticket comments",
+        description:
+          "Visible tickets only. Oldest first, UUID ascending breaks timestamp ties. Returns {data: {data: Comment[], page, limit, total}}.",
+        parameters: [
+          {
+            name: "ticketId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+          {
+            name: "page",
+            in: "query",
+            schema: { type: "integer", minimum: 1, default: 1 },
+          },
+          {
+            name: "limit",
+            in: "query",
+            schema: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+          },
+        ],
         security: [{ accessCookie: [] }, { bearerAuth: [] }],
         responses: { "200": { description: "Comment page" } },
       },
       post: {
         parameters: [{ $ref: "#/components/parameters/csrfProtection" }],
         summary: "Add a ticket comment",
+        description:
+          "Visible tickets only. CLOSED tickets return 409 CONFLICT. Body is a trimmed string of 1–4000 characters.",
         security: [{ accessCookie: [] }, { bearerAuth: [] }],
-        responses: { "201": { description: "Comment created" } },
+        responses: {
+          "201": { description: "Comment created" },
+          "409": { description: "Ticket is CLOSED" },
+        },
+      },
+    },
+    "/tickets/{ticketId}/comments/{commentId}": {
+      delete: {
+        summary: "Delete a comment (author or ADMIN)",
+        description:
+          "Ticket must be visible. Deletion is allowed even on CLOSED tickets.",
+        parameters: [
+          { $ref: "#/components/parameters/csrfProtection" },
+          {
+            name: "ticketId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+          {
+            name: "commentId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        security: [{ accessCookie: [] }, { bearerAuth: [] }],
+        responses: {
+          "204": { description: "Comment deleted" },
+          "403": { description: "Not the author or an administrator" },
+          "404": {
+            description:
+              "Ticket not visible, or comment not found on this ticket",
+          },
+        },
       },
     },
   },

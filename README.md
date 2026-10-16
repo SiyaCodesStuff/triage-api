@@ -7,7 +7,7 @@ The API base URL is `/api/v1`. OpenAPI paths are relative to that server URL.
 | Auth     | `POST /api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/refresh`, `/api/v1/auth/logout`                                                        |
 | Users    | `GET /api/v1/users/me`, `GET /api/v1/users/{userId}`, `GET /api/v1/users`, `PATCH /api/v1/users/{userId}/role`                                           |
 | Tickets  | `GET /api/v1/tickets`, `POST /api/v1/tickets`, `GET /api/v1/tickets/{ticketId}`, `PATCH /api/v1/tickets/{ticketId}`, `DELETE /api/v1/tickets/{ticketId}` |
-| Comments | `GET /api/v1/tickets/{ticketId}/comments`, `POST /api/v1/tickets/{ticketId}/comments`                                                                    |
+| Comments | `GET /api/v1/tickets/{ticketId}/comments`, `POST /api/v1/tickets/{ticketId}/comments`, `DELETE /api/v1/tickets/{ticketId}/comments/{commentId}`          |
 
 The previous `/api` routes are no longer mounted. Clients must use `/api/v1`.
 Refresh cookies are scoped to `/api/v1/auth`; sign in again after upgrading to obtain cookies at the new path.
@@ -63,3 +63,11 @@ Status changes by staff allow exactly `OPEN → IN_PROGRESS`, `IN_PROGRESS → R
 Filters combine with AND. `q` is a case-insensitive literal substring of title OR description (trimmed, 1–200 characters; `%` and `_` are literal). USERs always receive only their own tickets, ignoring any supplied `createdBy`; all other filters can only narrow that scope. Staff can filter any creator. Example: `/api/v1/tickets?page=2&pageSize=10&status=OPEN&priority=HIGH&q=portal&sort=priority&order=desc`.
 
 The response is `{ "data": [], "meta": { "page": 1, "pageSize": 20, "total": 0, "totalPages": 0 } }`. Totals include all active filters and ownership restrictions. Empty matches have zero total pages; pages past the end return an empty data array while retaining the filtered totals. Other paginated endpoints retain their existing contracts.
+
+## Comments
+
+`POST /api/v1/tickets/{ticketId}/comments` accepts `{ "body": "..." }` (trimmed, 1–4000 characters). Users can create/read comments only on tickets visible to them: USERs on their own tickets, AGENTs/ADMINs on all tickets. Foreign tickets return 404 for USERs. CLOSED tickets reject new comments with 409 `CONFLICT` for every role, but existing comments remain readable and deletable. Creation locks the ticket row until the insert commits so closure and creation are serialized.
+
+`GET /api/v1/tickets/{ticketId}/comments?page=1&limit=50` retains its existing response `{ "data": { "data": [], "page": 1, "limit": 50, "total": 0 } }`. Limit is 1–100. Results sort oldest first, then UUID ascending for tied timestamps; totals are scoped to the ticket.
+
+`DELETE /api/v1/tickets/{ticketId}/comments/{commentId}` returns 204. The ticket must be visible and the caller must be the author or an ADMIN. Ticket ownership alone does not grant deletion of other authors' comments, and AGENTs have no deletion override. Non-authors receive 403; missing comments and comments belonging to a different ticket receive 404. Mutations require `X-CSRF-Protection: 1` as documented in [docs/auth.md](docs/auth.md).

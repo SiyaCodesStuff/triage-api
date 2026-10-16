@@ -4,6 +4,7 @@ import { validateRequest } from "../../middleware/validate-request.js";
 import * as controller from "./controller.js";
 import {
   createCommentRequestSchema,
+  deleteCommentRequestSchema,
   listCommentsRequestSchema,
 } from "./schemas.js";
 
@@ -19,4 +20,10 @@ commentsRouter.post(
   "/tickets/:ticketId/comments",
   validateRequest(createCommentRequestSchema),
   controller.create,
+);
+
+commentsRouter.delete(
+  "/tickets/:ticketId/comments/:commentId",
+  validateRequest(deleteCommentRequestSchema),
+  controller.remove,
 );

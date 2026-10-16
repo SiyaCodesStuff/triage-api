@@ -17,3 +17,9 @@ export const createCommentRequestSchema = z.strictObject({
   params: ticketIdParams,
   query: emptyObject,
 });
+
+export const deleteCommentRequestSchema = z.strictObject({
+  body: emptyObject.optional(),
+  params: ticketIdParams.extend({ commentId: z.uuid() }),
+  query: emptyObject,
+});

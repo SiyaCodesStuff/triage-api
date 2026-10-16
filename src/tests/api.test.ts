@@ -64,6 +64,7 @@ describe("triage-api request handling", () => {
         "/tickets",
         "/tickets/{ticketId}",
         "/tickets/{ticketId}/comments",
+        "/tickets/{ticketId}/comments/{commentId}",
         "/users",
         "/users/me",
         "/users/{userId}",
@@ -82,9 +83,12 @@ describe("triage-api request handling", () => {
     for (const path of Object.values(openApiDocument.paths)) {
       for (const [method, operation] of Object.entries(path)) {
         if (["post", "patch", "delete", "put"].includes(method)) {
-          expect(operation).toHaveProperty("parameters", [
-            { $ref: "#/components/parameters/csrfProtection" },
-          ]);
+          expect(operation).toHaveProperty(
+            "parameters",
+            expect.arrayContaining([
+              { $ref: "#/components/parameters/csrfProtection" },
+            ]),
+          );
         }
       }
     }
