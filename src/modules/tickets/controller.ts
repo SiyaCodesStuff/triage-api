@@ -21,7 +21,7 @@ export const list: RequestHandler = async (request, response) => {
   const { query } = request.validated as ReturnType<
     typeof listTicketsRequestSchema.parse
   >;
-  response.json({ data: await service.listTickets(actor, query) });
+  response.json(await service.listTickets(actor, query));
 };
 
 export const create: RequestHandler = async (request, response) => {

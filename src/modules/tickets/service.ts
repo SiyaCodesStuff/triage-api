@@ -1,4 +1,4 @@
-import { and, count, desc, eq, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, or, type SQL } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import {
   tickets,
@@ -7,6 +7,8 @@ import {
   type Role,
   type TicketStatus,
 } from "../../db/schema.js";
+import { getPagination } from "../../lib/pagination.js";
+import type { listTicketsRequestSchema } from "./schemas.js";
 import { badRequest, forbidden, notFound } from "../../lib/app-error.js";
 
 export type Actor = { userId: string; role: Role };
@@ -20,43 +22,45 @@ function assertCanRead(ticket: TicketRecord, actor: Actor): void {
 
 export async function listTickets(
   actor: Actor,
-  filters: {
-    status?: TicketStatus;
-    priority?: Priority;
-    assignedTo?: string;
-    page: number;
-    limit: number;
-  },
-): Promise<{
-  data: TicketRecord[];
-  page: number;
-  limit: number;
-  total: number;
-}> {
+  filters: ReturnType<typeof listTicketsRequestSchema.parse>["query"],
+) {
+  const pagination = getPagination(filters);
   const conditions: SQL[] = [];
   if (actor.role === "USER")
     conditions.push(eq(tickets.createdBy, actor.userId));
   if (filters.status) conditions.push(eq(tickets.status, filters.status));
   if (filters.priority) conditions.push(eq(tickets.priority, filters.priority));
-  if (filters.assignedTo && actor.role !== "USER") {
+  if (actor.role !== "USER" && filters.createdBy)
+    conditions.push(eq(tickets.createdBy, filters.createdBy));
+  if (filters.q) {
+    const pattern = `%${filters.q.replace(/[\\%_]/g, "\\$&")}%`;
+    conditions.push(
+      or(ilike(tickets.title, pattern), ilike(tickets.description, pattern))!,
+    );
+  }
+  if (filters.assignedTo) {
     conditions.push(eq(tickets.assignedTo, filters.assignedTo));
   }
   const where = conditions.length ? and(...conditions) : undefined;
+  const sortColumn = {
+    createdAt: tickets.createdAt,
+    priority: tickets.priority,
+    status: tickets.status,
+  }[filters.sort];
+  const direction = filters.order === "asc" ? asc : desc;
   const [data, [totalRow]] = await Promise.all([
     db
       .select()
       .from(tickets)
       .where(where)
-      .orderBy(desc(tickets.createdAt), desc(tickets.id))
-      .limit(filters.limit)
-      .offset((filters.page - 1) * filters.limit),
+      .orderBy(direction(sortColumn), direction(tickets.id))
+      .limit(pagination.limit)
+      .offset(pagination.offset),
     db.select({ total: count() }).from(tickets).where(where),
   ]);
   return {
     data,
-    page: filters.page,
-    limit: filters.limit,
-    total: totalRow?.total ?? 0,
+    meta: pagination.meta(totalRow?.total ?? 0),
   };
 }
 
