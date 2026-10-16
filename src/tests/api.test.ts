@@ -49,6 +49,7 @@ describe("triage-api request handling", () => {
         "/tickets/{ticketId}/comments",
         "/users",
         "/users/me",
+        "/users/{userId}",
         "/users/{userId}/role",
       ].sort(),
     );

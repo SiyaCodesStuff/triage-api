@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, count, eq, ilike, or } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { users, type Role } from "../../db/schema.js";
 import { notFound } from "../../lib/app-error.js";
@@ -24,7 +24,15 @@ export async function getUser(userId: string): Promise<SafeUser> {
 export async function listUsers(
   page: number,
   limit: number,
-): Promise<{ data: SafeUser[]; page: number; limit: number }> {
+  search?: string,
+): Promise<{ data: SafeUser[]; page: number; limit: number; total: number }> {
+  // Escape LIKE metacharacters so search is a literal substring.
+  const pattern =
+    search === undefined ? undefined : `%${search.replace(/[\\%_]/g, "\\$&")}%`;
+  const where =
+    pattern === undefined
+      ? undefined
+      : or(ilike(users.name, pattern), ilike(users.email, pattern));
   const data = await db
     .select({
       id: users.id,
@@ -35,10 +43,12 @@ export async function listUsers(
       updatedAt: users.updatedAt,
     })
     .from(users)
+    .where(where)
     .orderBy(asc(users.name), asc(users.id))
     .limit(limit)
     .offset((page - 1) * limit);
-  return { data, page, limit };
+  const [result] = await db.select({ total: count() }).from(users).where(where);
+  return { data, page, limit, total: result?.total ?? 0 };
 }
 
 export async function changeRole(
