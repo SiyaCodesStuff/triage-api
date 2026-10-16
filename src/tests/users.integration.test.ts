@@ -1,11 +1,12 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
+import { createUser, loginAs } from "./helpers/index.js";
 import jwt from "jsonwebtoken";
 import argon2 from "argon2";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { app } from "../app.js";
 import { env } from "../config/env.js";
-import { db, pool } from "../db/client.js";
+import { db } from "../db/client.js";
 import { users, type Role } from "../db/schema.js";
 import { readSeedConfiguration, seedAdmin } from "../db/seed.js";
 
@@ -20,36 +21,17 @@ const publicKeys = [
 
 describe("administrator user management and seeding", () => {
   const prefix = `management-${crypto.randomUUID()}`;
-  const ids: string[] = [];
   const accounts = {} as Record<Role, { id: string; token: string }>;
-  beforeAll(async () => {
-    for (const role of ["USER", "AGENT", "ADMIN"] as const) {
-      const id = crypto.randomUUID();
-      await db.insert(users).values({
-        id,
-        name: `${prefix} ${role}`,
-        email: `${prefix}-${role.toLowerCase()}@example.test`,
-        passwordHash: "unused-test-value",
-        role,
-      });
-      ids.push(id);
-      accounts[role] = {
-        id,
-        token: jwt.sign({ role, type: "access" }, env.JWT_ACCESS_SECRET, {
-          subject: id,
-          jwtid: crypto.randomUUID(),
-          issuer: "triage-api",
-          audience: "triage-api-client",
-          expiresIn: "5m",
+  beforeEach(async () => {
+    for (const key of ["USER", "AGENT", "ADMIN"] as const) {
+      const role: Role = key;
+      accounts[key] = await loginAs(
+        await createUser({
+          name: `${prefix} ${key}`,
+          email: `${prefix}-${key.toLowerCase()}@example.test`,
+          role,
         }),
-      };
-    }
-  });
-  afterAll(async () => {
-    try {
-      if (ids.length) await db.delete(users).where(inArray(users.id, ids));
-    } finally {
-      await pool.end();
+      );
     }
   });
 
@@ -236,15 +218,13 @@ describe("administrator user management and seeding", () => {
     "returns the standard 401 for a deleted user's still-valid %s credential",
     async (transport) => {
       const id = crypto.randomUUID();
-      await db
-        .insert(users)
-        .values({
-          id,
-          name: "Deleted test user",
-          email: `${id}@example.test`,
-          passwordHash: "unused-test-value",
-        });
-      ids.push(id);
+      await db.insert(users).values({
+        id,
+        name: "Deleted test user",
+        email: `${id}@example.test`,
+        passwordHash: "unused-test-value",
+      });
+
       const token = jwt.sign(
         { role: "ADMIN", type: "access" },
         env.JWT_ACCESS_SECRET,
