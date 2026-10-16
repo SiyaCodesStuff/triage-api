@@ -75,3 +75,7 @@ The response is `{ "data": [], "meta": { "page": 1, "pageSize": 20, "total": 0, 
 ## HTTP security configuration
 
 `ENABLE_DOCS=true|false` controls Swagger UI and `/openapi.json`; default is off in production and on otherwise. Production CORS must use explicit trusted HTTP(S) origins in `CORS_ORIGINS`, never wildcards. Login/register/refresh share a 10-attempt limit per IP per 15 minutes. See [SECURITY.md](SECURITY.md) for controls and deployment trade-offs.
+
+## Decisions and trade-offs
+
+Rate-limit counters are stored in process memory, so limits reset on restart and are enforced per instance rather than globally. Running multiple replicas requires a shared store, for example Redis via `rate-limit-redis`. Adding a shared store is planned for when the app is scaled out.
