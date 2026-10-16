@@ -1,0 +1,41 @@
+meta {
+  name: Create ticket
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/v1/tickets
+  body: json
+  auth: none
+}
+
+headers {
+  X-CSRF-Protection: 1
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "title": "Portal access fails",
+    "description": "Created by the Bruno collection",
+    "priority": "MEDIUM"
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 201) bru.setVar("ticketId", res.getBody().data.id);
+}
+
+tests {
+  test("Expected HTTP 201", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+  test("Success envelope", function () {
+    expect(res.getBody()).to.have.property("data");
+  });
+}
+
+docs {
+  Creates an OPEN ticket owned by the current user. Captures ticketId.
+}

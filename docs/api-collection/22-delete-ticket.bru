@@ -1,0 +1,25 @@
+meta {
+  name: Delete ticket
+  type: http
+  seq: 22
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/tickets/{{ticketId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-CSRF-Protection: 1
+}
+
+tests {
+  test("Expected HTTP 204", function () {
+    expect(res.getStatus()).to.equal(204);
+  });
+}
+
+docs {
+  ADMIN only. Deletes this run's sample ticket and cascades any comments. The sample user remains.
+}

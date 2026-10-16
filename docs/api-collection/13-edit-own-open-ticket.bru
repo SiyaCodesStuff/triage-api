@@ -1,0 +1,36 @@
+meta {
+  name: Edit own open ticket
+  type: http
+  seq: 13
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/tickets/{{ticketId}}
+  body: json
+  auth: none
+}
+
+headers {
+  X-CSRF-Protection: 1
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "title": "Portal access still fails",
+    "description": "Updated while OPEN"
+  }
+}
+
+tests {
+  test("Expected HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("Success envelope", function () {
+    expect(res.getBody()).to.have.property("data");
+  });
+}
+
+docs {
+  USER may edit only title/description of their own OPEN ticket.
+}

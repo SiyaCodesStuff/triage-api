@@ -1,0 +1,21 @@
+meta {
+  name: Swagger UI
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/docs
+  body: none
+  auth: none
+}
+
+tests {
+  test("Expected HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+docs {
+  Set ENABLE_DOCS=true. Bruno follows the /docs/ redirect.
+}

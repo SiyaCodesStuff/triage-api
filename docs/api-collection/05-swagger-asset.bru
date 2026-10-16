@@ -1,0 +1,21 @@
+meta {
+  name: Swagger asset
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/docs/{{assetPath}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("Expected HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+docs {
+  Represents the documented /docs/{assetPath} operation. Default asset is swagger-ui.css.
+}

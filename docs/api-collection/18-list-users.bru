@@ -1,0 +1,24 @@
+meta {
+  name: List users
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{baseUrl}}/api/v1/users?page=1&limit=20&search=Bruno
+  body: none
+  auth: none
+}
+
+tests {
+  test("Expected HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("Success envelope", function () {
+    expect(res.getBody()).to.have.property("data");
+  });
+}
+
+docs {
+  ADMIN only. Case-insensitive literal name/email search. Nested page/limit/total envelope.
+}

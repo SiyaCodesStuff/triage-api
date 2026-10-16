@@ -1,0 +1,46 @@
+meta {
+  name: Login admin
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/login
+  body: json
+  auth: none
+}
+
+headers {
+  X-CSRF-Protection: 1
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "{{adminEmail}}",
+    "password": "{{adminPassword}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("adminEmail") || !bru.getEnvVar("adminPassword")) {
+    throw new Error("Set adminEmail and adminPassword locally to the seeded admin credentials");
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 200) bru.setVar("adminId", res.getBody().data.id);
+}
+
+tests {
+  test("Expected HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("Success envelope", function () {
+    expect(res.getBody()).to.have.property("data");
+  });
+}
+
+docs {
+  Supply the seeded administrator credentials locally. Replaces the user cookies in the shared jar.
+}

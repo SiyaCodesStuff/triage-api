@@ -1,0 +1,28 @@
+meta {
+  name: Refresh
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/refresh
+  body: none
+  auth: none
+}
+
+headers {
+  X-CSRF-Protection: 1
+}
+
+tests {
+  test("Expected HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("Success envelope", function () {
+    expect(res.getBody()).to.have.property("data");
+  });
+}
+
+docs {
+  Rotates cookies from the shared cookie jar. Never replay an earlier refresh cookie.
+}
