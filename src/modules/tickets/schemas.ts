@@ -1,0 +1,53 @@
+import { z } from "zod";
+import { priorities, ticketStatuses } from "../../db/schema.js";
+
+const emptyObject = z.strictObject({});
+
+export const ticketIdParams = z.strictObject({ ticketId: z.uuid() });
+
+export const listTicketsRequestSchema = z.strictObject({
+  body: emptyObject.optional(),
+  params: emptyObject,
+  query: z.strictObject({
+    status: z.enum(ticketStatuses).optional(),
+    priority: z.enum(priorities).optional(),
+    assignedTo: z.uuid().optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  }),
+});
+
+export const createTicketRequestSchema = z.strictObject({
+  body: z.strictObject({
+    title: z.string().trim().min(3).max(200),
+    description: z.string().trim().min(1).max(10_000),
+    priority: z.enum(priorities).default("MEDIUM"),
+  }),
+  params: emptyObject,
+  query: emptyObject,
+});
+
+export const getTicketRequestSchema = z.strictObject({
+  body: emptyObject.optional(),
+  params: ticketIdParams,
+  query: emptyObject,
+});
+
+export const updateTicketRequestSchema = z.strictObject({
+  body: z
+    .strictObject({
+      title: z.string().trim().min(3).max(200).optional(),
+      description: z.string().trim().min(1).max(10_000).optional(),
+      status: z.enum(ticketStatuses).optional(),
+      priority: z.enum(priorities).optional(),
+      assignedTo: z.uuid().nullable().optional(),
+    })
+    .refine(
+      (body) => Object.keys(body).length > 0,
+      "At least one field must be provided",
+    ),
+  params: ticketIdParams,
+  query: emptyObject,
+});
+
+export const deleteTicketRequestSchema = getTicketRequestSchema;
