@@ -1,43 +1,25 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
+import { createUser, loginAs, createTicket } from "./helpers/index.js";
 import { createHash } from "node:crypto";
 import argon2 from "argon2";
 import { eq } from "drizzle-orm";
 import { app } from "../app.js";
 import { db, pool } from "../db/client.js";
 import { register, login } from "../modules/auth/service.js";
-import { refreshSessions, tickets, users } from "../db/schema.js";
+import { refreshSessions, users } from "../db/schema.js";
 
 describe("triage-api database flows", () => {
-  const api = request.agent(app);
+  let api: ReturnType<typeof request.agent>;
   const email = `api-test-${crypto.randomUUID()}@example.test`;
   let userId: string;
   let ticketId: string;
-  let registrationCookies: string[] = [];
 
-  beforeAll(async () => {
-    const response = await api
-      .post("/api/v1/auth/register")
-      .set("X-CSRF-Protection", "1")
-      .send({
-        name: "API Test User",
-        email,
-        password: "correct horse battery staple",
-      });
-    expect(response.status).toBe(201);
-    const setCookie = response.headers["set-cookie"];
-    registrationCookies = Array.isArray(setCookie)
-      ? setCookie
-      : setCookie
-        ? [setCookie]
-        : [];
-    userId = response.body.data.id as string;
-  });
-
-  afterAll(async () => {
-    if (ticketId) await db.delete(tickets).where(eq(tickets.id, ticketId));
-    if (userId) await db.delete(users).where(eq(users.id, userId));
-    await pool.end();
+  beforeEach(async () => {
+    const user = await createUser({ name: "API Test User", email });
+    const session = await loginAs(user);
+    userId = user.id;
+    api = session.agent;
   });
 
   it("registers a ten-character password with argon2id and secure cookie policy", async () => {
@@ -322,20 +304,13 @@ describe("triage-api database flows", () => {
     expect(currentUser.body.data).not.toHaveProperty("passwordHash");
     expect(currentUser.body.data).not.toHaveProperty("accessToken");
     expect(currentUser.body.data).not.toHaveProperty("refreshToken");
-    expect(registrationCookies).toEqual(
-      expect.arrayContaining([expect.stringContaining("HttpOnly")]),
-    );
 
-    const created = await api
-      .post("/api/v1/tickets")
-      .set("X-CSRF-Protection", "1")
-      .send({
-        title: "Cannot access student portal",
-        description: "The portal returns an error after sign in.",
-        priority: "HIGH",
-      });
-    expect(created.status).toBe(201);
-    ticketId = created.body.data.id as string;
+    const created = await createTicket(userId, {
+      title: "Cannot access student portal",
+      description: "The portal returns an error after sign in.",
+      priority: "HIGH",
+    });
+    ticketId = created.id;
 
     const forbiddenUpdate = await api
       .patch(`/api/v1/tickets/${ticketId}`)

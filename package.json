@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.drizzle.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "node --env-file-if-exists=.env ./node_modules/vitest/vitest.mjs run --config vitest.coverage.config.ts --coverage",
     "test:integration": "node --env-file-if-exists=.env ./node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",
     "format": "prettier --write .",
     "db:up": "docker compose up -d postgres",

@@ -1,72 +1,27 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
-import jwt from "jsonwebtoken";
-import { eq, inArray } from "drizzle-orm";
+import { createUser, loginAs, createTicket } from "./helpers/index.js";
+import { eq } from "drizzle-orm";
 import { app } from "../app.js";
-import { env } from "../config/env.js";
-import { db, pool } from "../db/client.js";
-import {
-  comments,
-  tickets,
-  users,
-  type Role,
-  type TicketStatus,
-} from "../db/schema.js";
+import { db } from "../db/client.js";
+import { comments, type Role, type TicketStatus } from "../db/schema.js";
 
 describe("comment access and lifecycle", () => {
   const accounts = {} as Record<
     "USER" | "OTHER" | "AGENT" | "ADMIN",
     { id: string; token: string }
   >;
-  const userIds: string[] = [];
-  const ticketIds: string[] = [];
-  beforeAll(async () => {
+  beforeEach(async () => {
     for (const key of ["USER", "OTHER", "AGENT", "ADMIN"] as const) {
-      const id = crypto.randomUUID();
       const role: Role = key === "OTHER" ? "USER" : key;
-      await db
-        .insert(users)
-        .values({
-          id,
-          name: `Comment test ${key}`,
-          email: `${id}@example.test`,
-          passwordHash: "unused-test-value",
-          role,
-        });
-      userIds.push(id);
-      accounts[key] = {
-        id,
-        token: jwt.sign({ role, type: "access" }, env.JWT_ACCESS_SECRET, {
-          subject: id,
-          jwtid: crypto.randomUUID(),
-          issuer: "triage-api",
-          audience: "triage-api-client",
-          expiresIn: "5m",
-        }),
-      };
+      accounts[key] = await loginAs(
+        await createUser({ name: `Comment test ${key}`, role }),
+      );
     }
   });
-  afterAll(async () => {
-    try {
-      if (ticketIds.length)
-        await db.delete(tickets).where(inArray(tickets.id, ticketIds));
-      if (userIds.length)
-        await db.delete(users).where(inArray(users.id, userIds));
-    } finally {
-      await pool.end();
-    }
-  });
+
   async function ticket(status: TicketStatus = "OPEN") {
-    const [row] = await db
-      .insert(tickets)
-      .values({
-        title: "Comment test ticket",
-        description: "Test",
-        createdBy: accounts.USER.id,
-        status,
-      })
-      .returning();
-    ticketIds.push(row.id);
+    const row = await createTicket(accounts.USER, { status });
     return row.id;
   }
   function create(

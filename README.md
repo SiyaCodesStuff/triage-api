@@ -85,3 +85,11 @@ Rate-limit counters are stored in process memory, so limits reset on restart and
 The OpenAPI 3.1 document is generated at startup by the installed Zod-to-OpenAPI generator. Request bodies, path/query parameters and validation bounds come from the runtime Zod validators; public response schemas, error envelopes, cookies, CSRF and authentication requirements are registered in `src/config/openapi.ts` and `src/config/openapi-schemas.ts`. Business paths use `/api/v1`; operational paths override the server to `/`. UI/spec endpoints retain `ENABLE_DOCS` gating. Swagger vendor assets are documented under `/docs/{assetPath}`; Express's implicit HEAD and CORS preflight handling are described in the document.
 
 The OpenAPI test inspects Express router registrations and mount paths, checks method/path coverage, and proves a newly registered undocumented route is detected. It also checks local references, security schemes and request/response schema coverage. Add a spec registration and response schema whenever adding a route.
+
+## Test fixtures, isolation and coverage
+
+Integration fixtures use `createUser`, `loginAs` and `createTicket` from `src/tests/helpers`. `loginAs` performs real service login and provides an access token plus a cookie-aware Supertest agent without consuming the HTTP auth limiter's fixture budget. API authentication tests still exercise the HTTP endpoints directly.
+
+Integration tests run serially against `TEST_DATABASE_URL`. The database name must contain `test` and must not target the configured application database. Setup truncates comments, refresh sessions, tickets and users before and after every test; migration metadata is preserved. Use a dedicated disposable test database, never a database containing data you want to retain. Fixtures are recreated in `beforeEach` and setup closes each file's pool after its suite.
+
+`npm run test:coverage` runs both unit and integration projects with V8 coverage and fails below **80% global line coverage**. All application TypeScript files are included, including entry points and migration scripts; only tests/helpers and type declarations are excluded. Reports are written to `coverage/` (terminal table, `coverage-summary.json`, HTML). It requires the same migrated test database as `test:integration`.
