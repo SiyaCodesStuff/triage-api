@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
   index,
   pgEnum,
   pgTable,
@@ -40,7 +42,7 @@ export const users = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [uniqueIndex("users_email_unique").on(table.email)],
+  (table) => [uniqueIndex("users_email_unique").on(sql`lower(${table.email})`)],
 );
 
 export const tickets = pgTable(
@@ -65,6 +67,9 @@ export const tickets = pgTable(
       .defaultNow(),
   },
   (table) => [
+    check("tickets_title_nonempty", sql`length(btrim(${table.title})) > 0`),
+    check("tickets_title_length", sql`char_length(${table.title}) <= 200`),
+    index("tickets_created_at_idx").on(table.createdAt),
     index("tickets_created_by_created_at_idx").on(
       table.createdBy,
       table.createdAt,
@@ -93,6 +98,8 @@ export const comments = pgTable(
       .defaultNow(),
   },
   (table) => [
+    check("comments_body_nonempty", sql`length(btrim(${table.body})) > 0`),
+    check("comments_body_length", sql`char_length(${table.body}) <= 5000`),
     index("comments_ticket_created_at_idx").on(table.ticketId, table.createdAt),
   ],
 );

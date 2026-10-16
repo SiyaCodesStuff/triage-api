@@ -21,3 +21,15 @@ npm run typecheck && npm run lint && npm test && npm run test:integration
 ```
 
 Integration tests require `TEST_DATABASE_URL` pointing to an available, migrated test PostgreSQL database.
+
+Database integrity is enforced by migration `0001_database_integrity`: a unique index on `lower(users.email)`, ticket title and comment body checks, and an index on `tickets.created_at`. Titles must contain a non-space character after trimming and be at most 200 characters; comment bodies must contain a non-space character and be at most 5000 characters. Register and login normalise emails to lowercase; login also supports existing mixed-case stored addresses.
+
+`updated_at` is maintained by PostgreSQL `BEFORE UPDATE` triggers on users, tickets and comments. This covers Drizzle and direct SQL, including no-op updates. Each update uses the later of the database clock or the previous timestamp plus one microsecond, so timestamps strictly advance. Trigger SQL is maintained in the migration because Drizzle Kit does not model triggers.
+
+Before applying the migration, resolve existing case-insensitive duplicate emails or rows violating the new checks. The migration fails rather than deleting or rewriting such data. Apply to the test database before running integration tests:
+
+```sh
+npm run db:migrate:test
+```
+
+Apply to the application database when ready with `npm run db:migrate`.
