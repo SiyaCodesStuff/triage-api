@@ -100,20 +100,20 @@ sequenceDiagram
   participant A as API
   participant D as PostgreSQL
   C->>A: Register/login + X-CSRF-Protection: 1
-  A->>A: Lowercase email; hash/verify Argon2id password
+  A->>A: Lowercase email, hash/verify Argon2id password
   A->>D: Store SHA-256 refresh digest
   A-->>C: Public user + HttpOnly access/refresh cookies
   C->>A: Protected request + access cookie (or Bearer JWT)
-  A->>A: Verify JWT; use sub as identity
+  A->>A: Verify JWT, use sub as identity
   A->>D: Load current user id and role
   A-->>C: Authorized response (401 if deleted)
   C->>A: Refresh cookie + CSRF header
-  A->>D: Lock user; revoke old session; insert new digest
+  A->>D: Lock user, revoke old session, insert new digest
   A-->>C: Rotated cookies + public user
   Note over A,D: Reuse of a revoked valid refresh token revokes all user sessions
   C->>A: Logout + refresh cookie + CSRF header
   A->>D: Revoke presented refresh session
-  A-->>C: Clear cookies; 204
+  A-->>C: Clear cookies, 204
 ```
 
 Register/login/refresh return `{ "data": <public user> }`; tokens are sent as cookies, not JSON. Cookies are HttpOnly, SameSite=Strict and Secure in production. The access cookie is scoped to `/`; the refresh cookie to `/api/v1/auth`. All protected routes also accept an access Bearer JWT. Every unsafe `/api/v1` request requires `X-CSRF-Protection: 1`, even with Bearer authentication. Browser requests need `credentials: "include"`.
