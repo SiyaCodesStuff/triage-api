@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import argon2 from "argon2";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import jwt, { type JwtPayload, type SignOptions } from "jsonwebtoken";
 import { z } from "zod";
 import { env, durationToMilliseconds } from "../../config/env.js";
@@ -122,7 +122,7 @@ export async function register(input: {
         .insert(users)
         .values({
           name: input.name,
-          email: input.email,
+          email: input.email.trim().toLowerCase(),
           passwordHash,
           role: "USER",
         })
@@ -134,11 +134,13 @@ export async function register(input: {
       return { user: toSafeUser(user), tokens };
     });
   } catch (error) {
+    const databaseError =
+      error instanceof Error && error.cause ? error.cause : error;
     if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === "23505"
+      typeof databaseError === "object" &&
+      databaseError !== null &&
+      "code" in databaseError &&
+      databaseError.code === "23505"
     ) {
       throw conflict("An account with that email already exists");
     }
@@ -153,7 +155,7 @@ export async function login(
   const [user] = await db
     .select()
     .from(users)
-    .where(eq(users.email, email))
+    .where(eq(sql`lower(${users.email})`, email.trim().toLowerCase()))
     .limit(1);
   const valid = user
     ? await argon2.verify(user.passwordHash, password)
