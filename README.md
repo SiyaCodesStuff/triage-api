@@ -95,3 +95,20 @@ Integration fixtures use `createUser`, `loginAs` and `createTicket` from `src/te
 Integration tests run serially against `TEST_DATABASE_URL`. The database name must contain `test` and must not target the configured application database. Setup truncates comments, refresh sessions, tickets and users before and after every test; migration metadata is preserved. Use a dedicated disposable test database, never a database containing data you want to retain. Fixtures are recreated in `beforeEach` and setup closes each file's pool after its suite.
 
 `npm run test:coverage` runs both unit and integration projects with V8 coverage and fails below **80% global line coverage**. Application TypeScript files are included; only tests/helpers, type declarations and the process entrypoints `src/server.ts`, `src/db/migrate.ts` and `src/db/migrate-test.ts` are excluded. `src/db/seed.ts` remains included. Reports are written to `coverage/` (terminal table, `coverage-summary.json`, HTML). It requires the same migrated test database as `test:integration`.
+
+## Containers
+
+The Dockerfile uses Node 24 Debian slim stages: install dependencies, compile TypeScript and prune dev dependencies, then copy only production dependencies, compiled output and migrations into the runtime stage. It runs as the built-in non-root `node` user and starts Node directly so shutdown signals reach the application. Its healthcheck requests `/health` using Node's fetch with a two-second timeout; no curl package is needed. `.dockerignore` keeps credentials, local dependencies, tests and build artifacts out of the build context. No environment file or secrets are baked into the image.
+
+The default Compose configuration still starts only Postgres. Profile `full` also builds the API image and starts a one-shot `migrate` service after Postgres is healthy. The API waits for that job to complete successfully before starting; failed migrations prevent API startup. The migration job uses the same production image and reads its SQL/journal from `/app/drizzle`. API and migration settings come from Compose environment interpolation (shell environment or the local `.env`), with production mode and container port 3000 fixed. `PORT` selects the published host port.
+
+Set strong, distinct `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` values before starting the full profile. Missing/invalid secrets cause application configuration validation to fail. `DATABASE_URL` inside these services uses the Compose hostname `postgres` and internal port 5432, independently of the host application's localhost URL and `POSTGRES_PORT`. If credentials contain URL-reserved characters, provide a fully percent-encoded `CONTAINER_DATABASE_URL` override; keep it consistent with the Postgres credentials. `ENABLE_DOCS` defaults to false for the full profile. Plain HTTP local testing with production Secure cookies requires a Bearer access credential or an HTTPS reverse proxy.
+
+To build/start the stack and measure the built image (when Docker commands are permitted):
+
+```sh
+docker compose --profile full up --build -d
+docker image inspect triage-api:local --format '{{.Size}}'
+```
+
+The inspect value is the local image's uncompressed size in bytes; compressed registry transfer size differs. Image size depends on architecture and the current Node base image, so it must be measured after a build rather than estimated. The stack requires Docker Compose with health and completed-job dependency conditions. Database volumes persist across restarts.
