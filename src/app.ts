@@ -15,13 +15,7 @@ import { authRouter } from "./modules/auth/routes.js";
 import { commentsRouter } from "./modules/comments/routes.js";
 import { ticketsRouter } from "./modules/tickets/routes.js";
 import { usersRouter } from "./modules/users/routes.js";
-import { z } from "zod";
-
-const noRequestDataSchema = z.strictObject({
-  body: z.strictObject({}).optional(),
-  params: z.strictObject({}),
-  query: z.strictObject({}),
-});
+import { noRequestDataSchema } from "./config/openapi-schemas.js";
 
 export const app = express();
 

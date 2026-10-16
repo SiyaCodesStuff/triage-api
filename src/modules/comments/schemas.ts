@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "../../lib/zod.js";
 import { ticketIdParams } from "../tickets/schemas.js";
 
 const emptyObject = z.strictObject({});

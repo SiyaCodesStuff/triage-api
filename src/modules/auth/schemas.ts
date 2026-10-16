@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "../../lib/zod.js";
 
 export const registerRequestSchema = z.strictObject({
   body: z.strictObject({
