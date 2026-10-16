@@ -89,14 +89,53 @@ export const openApiDocument = {
     "/users": {
       get: {
         summary: "List users (ADMIN)",
+        parameters: [
+          {
+            name: "page",
+            in: "query",
+            schema: { type: "integer", minimum: 1, default: 1 },
+          },
+          {
+            name: "limit",
+            in: "query",
+            schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+          },
+          {
+            name: "search",
+            in: "query",
+            description: "Case-insensitive literal substring in name or email",
+            schema: { type: "string", minLength: 1, maxLength: 254 },
+          },
+        ],
         security: [{ accessCookie: [] }, { bearerAuth: [] }],
         responses: { "200": { description: "User page" } },
+      },
+    },
+    "/users/{userId}": {
+      get: {
+        summary: "Get a user (ADMIN)",
+        parameters: [
+          {
+            name: "userId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        security: [{ accessCookie: [] }, { bearerAuth: [] }],
+        responses: {
+          "200": { description: "Public user" },
+          "403": { description: "Administrator access required" },
+          "404": { description: "User not found" },
+        },
       },
     },
     "/users/{userId}/role": {
       patch: {
         parameters: [{ $ref: "#/components/parameters/csrfProtection" }],
         summary: "Change a user's role (ADMIN)",
+        description:
+          "Administrators cannot demote themselves. Requires a UUID userId and a body containing role (USER, AGENT or ADMIN).",
         security: [{ accessCookie: [] }, { bearerAuth: [] }],
         responses: { "200": { description: "Updated user" } },
       },

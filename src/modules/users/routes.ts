@@ -5,6 +5,7 @@ import * as controller from "./controller.js";
 import {
   changeRoleRequestSchema,
   getMeRequestSchema,
+  getUserRequestSchema,
   listUsersRequestSchema,
 } from "./schemas.js";
 
@@ -19,12 +20,22 @@ usersRouter.get(
 usersRouter.get(
   "/",
   requireAuth,
+  controller.requireAdmin,
   validateRequest(listUsersRequestSchema),
   controller.list,
 );
 usersRouter.patch(
   "/:userId/role",
   requireAuth,
+  controller.requireAdmin,
   validateRequest(changeRoleRequestSchema),
   controller.updateRole,
+);
+
+usersRouter.get(
+  "/:userId",
+  requireAuth,
+  controller.requireAdmin,
+  validateRequest(getUserRequestSchema),
+  controller.getById,
 );
