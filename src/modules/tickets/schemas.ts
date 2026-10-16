@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paginationQuery } from "../../lib/pagination.js";
 import { priorities, ticketStatuses } from "../../db/schema.js";
 
 const emptyObject = z.strictObject({});
@@ -12,8 +13,11 @@ export const listTicketsRequestSchema = z.strictObject({
     status: z.enum(ticketStatuses).optional(),
     priority: z.enum(priorities).optional(),
     assignedTo: z.uuid().optional(),
-    page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(100).default(20),
+    createdBy: z.uuid().optional(),
+    q: z.string().trim().min(1).max(200).optional(),
+    sort: z.enum(["createdAt", "priority", "status"]).default("createdAt"),
+    order: z.enum(["asc", "desc"]).default("desc"),
+    ...paginationQuery,
   }),
 });
 

@@ -143,6 +143,68 @@ export const openApiDocument = {
     "/tickets": {
       get: {
         summary: "List visible tickets",
+        description:
+          "Returns {data: Ticket[], meta: {page, pageSize, total, totalPages}}. USERs are always scoped to their own tickets; createdBy is ignored for USERs. Priority sorts LOW/MEDIUM/HIGH/URGENT; status sorts OPEN/IN_PROGRESS/RESOLVED/CLOSED, with id as a stable tie-breaker.",
+        parameters: [
+          {
+            name: "page",
+            in: "query",
+            schema: { type: "integer", minimum: 1, default: 1 },
+          },
+          {
+            name: "pageSize",
+            in: "query",
+            schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+          },
+          {
+            name: "status",
+            in: "query",
+            schema: {
+              type: "string",
+              enum: ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"],
+            },
+          },
+          {
+            name: "priority",
+            in: "query",
+            schema: {
+              type: "string",
+              enum: ["LOW", "MEDIUM", "HIGH", "URGENT"],
+            },
+          },
+          {
+            name: "assignedTo",
+            in: "query",
+            schema: { type: "string", format: "uuid" },
+          },
+          {
+            name: "createdBy",
+            in: "query",
+            description: "AGENT/ADMIN only; ignored for USERs",
+            schema: { type: "string", format: "uuid" },
+          },
+          {
+            name: "q",
+            in: "query",
+            description:
+              "Case-insensitive literal substring of title or description",
+            schema: { type: "string", minLength: 1, maxLength: 200 },
+          },
+          {
+            name: "sort",
+            in: "query",
+            schema: {
+              type: "string",
+              enum: ["createdAt", "priority", "status"],
+              default: "createdAt",
+            },
+          },
+          {
+            name: "order",
+            in: "query",
+            schema: { type: "string", enum: ["asc", "desc"], default: "desc" },
+          },
+        ],
         security: [{ accessCookie: [] }, { bearerAuth: [] }],
         responses: { "200": { description: "Ticket page" } },
       },

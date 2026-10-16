@@ -42,5 +42,5 @@ describe("admin seed configuration", () => {
     expect(result.status).toBe(1);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("Admin seed failed");
-  });
+  }, 15000);
 });

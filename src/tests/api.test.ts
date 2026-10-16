@@ -275,6 +275,31 @@ describe("triage-api request handling", () => {
     }
   });
 
+  it.each([
+    "page=0",
+    "page=-1",
+    "page=1.5",
+    "page=9007199254740991",
+    "pageSize=0",
+    "pageSize=101",
+    "pageSize=no",
+    "sort=title",
+    "sort=createdAt%3BDROP",
+    "order=sideways",
+    "status=unknown",
+    "priority=unknown",
+    "assignedTo=not-a-uuid",
+    "createdBy=not-a-uuid",
+    "q=%20%20",
+    "limit=20",
+  ])("rejects invalid ticket list query %s", async (query) => {
+    const response = await request(app)
+      .get(`/api/v1/tickets?${query}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
   it("ignores query strings on the health route", async () => {
     const health = await request(app).get("/health?x=1");
     expect(health.status).toBe(200);

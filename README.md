@@ -55,3 +55,11 @@ Ticket endpoints check the current database role, so demotion immediately applie
 USERs create tickets owned by themselves, list/read only their own tickets, and edit only title/description while the ticket is OPEN. Requests for another user's ticket return 404, including PATCH and DELETE. USERs cannot change status, priority or assignment. AGENTs and ADMINs can list/read all tickets, change priority, and assign tickets to an AGENT or ADMIN (or clear assignment with null). Existing staff title/description editing remains available. Only ADMINs delete tickets.
 
 Status changes by staff allow exactly `OPEN → IN_PROGRESS`, `IN_PROGRESS → RESOLVED`, `RESOLVED → CLOSED`, and `RESOLVED → OPEN`. All other requested transitions, including sending the current status again, return 400 `BAD_REQUEST`. USER field/status restrictions return 403. Updates lock the ticket row in a transaction so concurrent changes validate against its latest status, and rejected combined updates change no fields. State-changing requests require the CSRF header described above.
+
+## Ticket listing
+
+`GET /api/v1/tickets` accepts `page` (default 1), `pageSize` (default 20, range 1–100), `status`, `priority`, `assignedTo` (UUID), `createdBy` (UUID, staff only), `q`, `sort` (`createdAt`, `priority`, `status`) and `order` (`asc`, `desc`). Defaults are `createdAt` descending. Priority order is LOW, MEDIUM, HIGH, URGENT; status order is OPEN, IN_PROGRESS, RESOLVED, CLOSED. The ticket UUID breaks ties in the selected direction, making pagination stable. Invalid values return 400; the old `limit` parameter is no longer accepted.
+
+Filters combine with AND. `q` is a case-insensitive literal substring of title OR description (trimmed, 1–200 characters; `%` and `_` are literal). USERs always receive only their own tickets, ignoring any supplied `createdBy`; all other filters can only narrow that scope. Staff can filter any creator. Example: `/api/v1/tickets?page=2&pageSize=10&status=OPEN&priority=HIGH&q=portal&sort=priority&order=desc`.
+
+The response is `{ "data": [], "meta": { "page": 1, "pageSize": 20, "total": 0, "totalPages": 0 } }`. Totals include all active filters and ownership restrictions. Empty matches have zero total pages; pages past the end return an empty data array while retaining the filtered totals. Other paginated endpoints retain their existing contracts.

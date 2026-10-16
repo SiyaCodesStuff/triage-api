@@ -111,16 +111,14 @@ describe("ticket authorization and lifecycle", () => {
     const own = await fixture();
     const other = await fixture("OTHER");
     const listed = await request(app)
-      .get("/api/v1/tickets?limit=100")
+      .get("/api/v1/tickets?pageSize=100")
       .set("Authorization", `Bearer ${accounts.USER.token}`);
     expect(listed.status).toBe(200);
     expect(
-      listed.body.data.data.some(
-        (ticket: { id: string }) => ticket.id === own.id,
-      ),
+      listed.body.data.some((ticket: { id: string }) => ticket.id === own.id),
     ).toBe(true);
     expect(
-      listed.body.data.data.every(
+      listed.body.data.every(
         (ticket: { createdBy: string }) =>
           ticket.createdBy === accounts.USER.id,
       ),
@@ -219,13 +217,11 @@ describe("ticket authorization and lifecycle", () => {
         ).status,
       ).toBe(200);
       const listed = await request(app)
-        .get("/api/v1/tickets?limit=100")
+        .get("/api/v1/tickets?pageSize=100")
         .set("Authorization", `Bearer ${accounts[role].token}`);
       expect(listed.status).toBe(200);
       expect(
-        listed.body.data.data.some(
-          (row: { id: string }) => row.id === ticket.id,
-        ),
+        listed.body.data.some((row: { id: string }) => row.id === ticket.id),
       ).toBe(true);
       for (const assignee of ["AGENT", "ADMIN"] as const) {
         const response = await patch(ticket.id, role, {
@@ -332,11 +328,11 @@ describe("ticket authorization and lifecycle", () => {
           ).status,
         ).toBe(403);
         const listed = await request(app)
-          .get("/api/v1/tickets?limit=100")
+          .get("/api/v1/tickets?pageSize=100")
           .set("Authorization", auth);
         expect(listed.status).toBe(200);
         expect(
-          listed.body.data.data.every(
+          listed.body.data.every(
             (ticket: { createdBy: string }) =>
               ticket.createdBy === accounts[role].id,
           ),
@@ -352,6 +348,169 @@ describe("ticket authorization and lifecycle", () => {
       }
     },
   );
+
+  it("combines filters, search, sorting and pagination while enforcing USER scope", async () => {
+    const marker = `listing-${crypto.randomUUID()}`;
+    const definitions = [
+      { owner: "USER", status: "OPEN", priority: "LOW", assignee: "AGENT" },
+      {
+        owner: "USER",
+        status: "IN_PROGRESS",
+        priority: "HIGH",
+        assignee: "ADMIN",
+      },
+      { owner: "OTHER", status: "OPEN", priority: "URGENT", assignee: "AGENT" },
+      {
+        owner: "OTHER",
+        status: "RESOLVED",
+        priority: "MEDIUM",
+        assignee: "ADMIN",
+      },
+      { owner: "USER", status: "OPEN", priority: "HIGH", assignee: "AGENT" },
+      { owner: "OTHER", status: "CLOSED", priority: "LOW", assignee: null },
+    ] as const;
+    const rows: (typeof tickets.$inferSelect)[] = [];
+    for (const [i, definition] of definitions.entries()) {
+      const ticket = await fixture(definition.owner, definition.status);
+      const [row] = await db
+        .update(tickets)
+        .set({
+          title: i === 1 ? "Ordinary title" : `${marker} title ${i}`,
+          description:
+            i === 1 ? `${marker} description` : "Ordinary description",
+          priority: definition.priority,
+          assignedTo: definition.assignee
+            ? accounts[definition.assignee].id
+            : null,
+          createdAt: new Date(Date.UTC(2000, 0, i + 1)),
+        })
+        .where(eq(tickets.id, ticket.id))
+        .returning();
+      rows.push(row);
+    }
+    const list = (
+      role: keyof typeof accounts,
+      query: Record<string, string | number | undefined> = {},
+    ) =>
+      request(app)
+        .get("/api/v1/tickets")
+        .query({ q: marker.toUpperCase(), ...query })
+        .set("Authorization", `Bearer ${accounts[role].token}`);
+    for (const role of ["AGENT", "ADMIN"] as const) {
+      const all = await list(role);
+      expect(all.status).toBe(200);
+      expect(Object.keys(all.body).sort()).toEqual(["data", "meta"]);
+      expect(all.body.meta).toEqual({
+        page: 1,
+        pageSize: 20,
+        total: 6,
+        totalPages: 1,
+      });
+      expect(all.body.data.map((row: { id: string }) => row.id)).toEqual(
+        [...rows].reverse().map((row) => row.id),
+      );
+      const page = await list(role, { page: 2, pageSize: 2 });
+      expect(page.body.meta).toEqual({
+        page: 2,
+        pageSize: 2,
+        total: 6,
+        totalPages: 3,
+      });
+      expect(page.body.data.map((row: { id: string }) => row.id)).toEqual([
+        rows[3].id,
+        rows[2].id,
+      ]);
+      const filtered = await list(role, {
+        status: "OPEN",
+        priority: "HIGH",
+        assignedTo: accounts.AGENT.id,
+        createdBy: accounts.USER.id,
+      });
+      expect(filtered.body.data.map((row: { id: string }) => row.id)).toEqual([
+        rows[4].id,
+      ]);
+      expect(filtered.body.meta.total).toBe(1);
+      const createdBy = await list(role, { createdBy: accounts.OTHER.id });
+      expect(createdBy.body.meta.total).toBe(3);
+      const assigned = await list(role, { assignedTo: accounts.ADMIN.id });
+      expect(assigned.body.data.map((row: { id: string }) => row.id)).toEqual([
+        rows[3].id,
+        rows[1].id,
+      ]);
+      for (const sort of ["createdAt", "priority", "status"] as const) {
+        for (const order of ["asc", "desc"] as const) {
+          const priorityRank = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+          const statusRank = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
+          const rank = (row: (typeof rows)[number]) =>
+            sort === "createdAt"
+              ? row.createdAt.getTime()
+              : sort === "priority"
+                ? priorityRank.indexOf(row.priority)
+                : statusRank.indexOf(row.status);
+          const expected = [...rows].sort(
+            (a, b) =>
+              (order === "asc" ? 1 : -1) *
+              (rank(a) - rank(b) || a.id.localeCompare(b.id)),
+          );
+          const sorted = await list(role, { sort, order, pageSize: 100 });
+          expect(sorted.status).toBe(200);
+          expect(sorted.body.data.map((row: { id: string }) => row.id)).toEqual(
+            expected.map((row) => row.id),
+          );
+          const first = await list(role, { sort, order, pageSize: 2 });
+          const second = await list(role, {
+            sort,
+            order,
+            pageSize: 2,
+            page: 2,
+          });
+          expect(
+            [...first.body.data, ...second.body.data].map(
+              (row: { id: string }) => row.id,
+            ),
+          ).toEqual(expected.slice(0, 4).map((row) => row.id));
+        }
+      }
+    }
+    const own = await list("USER", { createdBy: accounts.OTHER.id });
+    expect(own.body.meta.total).toBe(3);
+    expect(
+      own.body.data.every(
+        (row: { createdBy: string }) => row.createdBy === accounts.USER.id,
+      ),
+    ).toBe(true);
+    const narrowed = await list("USER", {
+      createdBy: accounts.OTHER.id,
+      assignedTo: accounts.AGENT.id,
+      status: "OPEN",
+      priority: "HIGH",
+      sort: "priority",
+      order: "asc",
+    });
+    expect(narrowed.body.data.map((row: { id: string }) => row.id)).toEqual([
+      rows[4].id,
+    ]);
+    expect(narrowed.body.meta.total).toBe(1);
+    const assignedOwn = await list("USER", { assignedTo: accounts.AGENT.id });
+    expect(assignedOwn.body.meta.total).toBe(2);
+    for (const query of [
+      { q: `${marker} title 2`, createdBy: accounts.OTHER.id },
+      { status: "CLOSED" },
+      { q: `${marker}%` },
+    ]) {
+      const empty = await list("USER", query);
+      expect(empty.status).toBe(200);
+      expect(empty.body).toEqual({
+        data: [],
+        meta: { page: 1, pageSize: 20, total: 0, totalPages: 0 },
+      });
+    }
+    const beyond = await list("ADMIN", { page: 99, pageSize: 2 });
+    expect(beyond.body).toEqual({
+      data: [],
+      meta: { page: 99, pageSize: 2, total: 6, totalPages: 3 },
+    });
+  });
 
   it("only ADMIN deletes tickets, including CLOSED tickets", async () => {
     const ticket = await fixture("OTHER", "CLOSED");
