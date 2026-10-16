@@ -1,10 +1,31 @@
 import { z } from "zod";
 
+const corsOriginSchema = z
+  .url()
+  .refine((value) => {
+    try {
+      const url = new URL(value);
+      return (
+        ["http:", "https:"].includes(url.protocol) &&
+        !url.hostname.includes("*") &&
+        !url.username &&
+        !url.password &&
+        url.pathname === "/" &&
+        !url.search &&
+        !url.hash
+      );
+    } catch {
+      return false;
+    }
+  }, "must be an explicit HTTP(S) origin without wildcards")
+  .transform((value) => new URL(value).origin);
+
 const environmentSchema = z
   .object({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
+    ENABLE_DOCS: z.enum(["true", "false"]).optional(),
     TRUST_PROXY: z.coerce.number().int().min(0).default(0),
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     DATABASE_URL: z
@@ -40,7 +61,7 @@ const environmentSchema = z
           .map((origin) => origin.trim())
           .filter(Boolean),
       )
-      .pipe(z.array(z.url()))
+      .pipe(z.array(corsOriginSchema))
       .optional(),
   })
   .refine(
@@ -63,7 +84,13 @@ if (!parsedEnvironment.success) {
   );
 }
 
-export const env = parsedEnvironment.data;
+export const env = {
+  ...parsedEnvironment.data,
+  ENABLE_DOCS:
+    parsedEnvironment.data.ENABLE_DOCS === undefined
+      ? parsedEnvironment.data.NODE_ENV !== "production"
+      : parsedEnvironment.data.ENABLE_DOCS === "true",
+};
 export const isProduction = env.NODE_ENV === "production";
 
 export function durationToMilliseconds(duration: string): number {

@@ -36,6 +36,23 @@ export const errorHandler: ErrorRequestHandler = (
     return;
   }
 
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "type" in error &&
+    error.type === "entity.too.large"
+  ) {
+    response
+      .status(413)
+      .json({
+        error: {
+          code: "PAYLOAD_TOO_LARGE",
+          message: "JSON body exceeds the 16 KB limit",
+        },
+      });
+    return;
+  }
+
   if (error instanceof SyntaxError && "body" in error) {
     response.status(400).json({
       error: {
@@ -47,7 +64,11 @@ export const errorHandler: ErrorRequestHandler = (
   }
 
   logger.error(
-    { err: error, method: request.method, path: request.path },
+    {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      method: request.method,
+      path: request.path,
+    },
     "Unhandled request error",
   );
   response.status(500).json({
