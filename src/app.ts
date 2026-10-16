@@ -45,9 +45,9 @@ app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'"],
       },
     },
   }),
@@ -71,20 +71,37 @@ app.use(
   rateLimit({
     windowMs: 60_000,
     limit: 300,
+    message: {
+      error: {
+        code: "RATE_LIMITED",
+        message: "Too many requests; try again later",
+      },
+    },
     standardHeaders: "draft-8",
     legacyHeaders: false,
   }),
 );
 app.use(express.json({ limit: "16kb", strict: true }));
 
-app.get(
-  "/openapi.json",
-  validateRequest(noRequestDataSchema),
-  (_request, response) => {
-    response.json(openApiDocument);
-  },
-);
-app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
+if (env.ENABLE_DOCS) {
+  app.get(
+    "/openapi.json",
+    validateRequest(noRequestDataSchema),
+    (_request, response) => response.json(openApiDocument),
+  );
+  app.use(
+    "/docs",
+    helmet.contentSecurityPolicy({
+      directives: {
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:"],
+      },
+    }),
+    swaggerUi.serve,
+    swaggerUi.setup(openApiDocument),
+  );
+}
 
 app.use("/api/v1", requireCsrf);
 

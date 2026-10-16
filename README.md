@@ -71,3 +71,7 @@ The response is `{ "data": [], "meta": { "page": 1, "pageSize": 20, "total": 0, 
 `GET /api/v1/tickets/{ticketId}/comments?page=1&limit=50` retains its existing response `{ "data": { "data": [], "page": 1, "limit": 50, "total": 0 } }`. Limit is 1–100. Results sort oldest first, then UUID ascending for tied timestamps; totals are scoped to the ticket.
 
 `DELETE /api/v1/tickets/{ticketId}/comments/{commentId}` returns 204. The ticket must be visible and the caller must be the author or an ADMIN. Ticket ownership alone does not grant deletion of other authors' comments, and AGENTs have no deletion override. Non-authors receive 403; missing comments and comments belonging to a different ticket receive 404. Mutations require `X-CSRF-Protection: 1` as documented in [docs/auth.md](docs/auth.md).
+
+## HTTP security configuration
+
+`ENABLE_DOCS=true|false` controls Swagger UI and `/openapi.json`; default is off in production and on otherwise. Production CORS must use explicit trusted HTTP(S) origins in `CORS_ORIGINS`, never wildcards. Login/register/refresh share a 10-attempt limit per IP per 15 minutes. See [SECURITY.md](SECURITY.md) for controls and deployment trade-offs.
