@@ -17,9 +17,9 @@ const environmentSchema = z
         ["postgres:", "postgresql:"].includes(new URL(value).protocol),
       )
       .optional(),
-    POSTGRES_USER: z.string().min(1).default("helpdesk"),
-    POSTGRES_PASSWORD: z.string().min(1).default("helpdesk"),
-    POSTGRES_DB: z.string().min(1).default("helpdesk"),
+    POSTGRES_USER: z.string().min(1).default("triage"),
+    POSTGRES_PASSWORD: z.string().min(1).default("triage"),
+    POSTGRES_DB: z.string().min(1).default("triage"),
     POSTGRES_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
     JWT_ACCESS_SECRET: z.string().min(32),
     JWT_REFRESH_SECRET: z.string().min(32),
