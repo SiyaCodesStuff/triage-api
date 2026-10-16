@@ -7,7 +7,7 @@ import type {
 import * as service from "./service.js";
 
 export const list: RequestHandler = async (request, response) => {
-  const actor = request.actor;
+  const actor = request.user;
   if (!actor) throw unauthorized();
   const { params, query } = request.validated as ReturnType<
     typeof listCommentsRequestSchema.parse
@@ -23,7 +23,7 @@ export const list: RequestHandler = async (request, response) => {
 };
 
 export const create: RequestHandler = async (request, response) => {
-  const actor = request.actor;
+  const actor = request.user;
   if (!actor) throw unauthorized();
   const { body, params } = request.validated as ReturnType<
     typeof createCommentRequestSchema.parse

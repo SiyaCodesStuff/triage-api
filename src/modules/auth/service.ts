@@ -87,12 +87,11 @@ function parseClaims(
 
 export function verifyAccessToken(token: string): {
   userId: string;
-  role: Role;
 } {
   const claims = parseClaims(token, env.JWT_ACCESS_SECRET);
   if (claims.type !== "access")
     throw unauthorized("The access credential is invalid or expired");
-  return { userId: claims.sub, role: claims.role };
+  return { userId: claims.sub };
 }
 
 async function storeRefreshSession(

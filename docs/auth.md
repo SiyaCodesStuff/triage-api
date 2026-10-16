@@ -15,3 +15,9 @@ For browser calls use `credentials: "include"` and `headers: { "Content-Type": "
 Refresh credentials are signed, expiring JWTs. Only their SHA-256 hex digests are stored in `refresh_sessions`; raw credentials are never stored there. Refresh validates signature, issuer, audience, type and expiry, revokes the current session, and issues a fresh pair. Refresh operations lock the user row so concurrent rotations/replays cannot leave a surviving refresh session after reuse detection. Clients should serialize refresh attempts.
 
 Presenting a previously revoked, still cryptographically valid refresh credential revokes **all** refresh sessions for that user, including other devices. The revocation commits before returning 401. Unknown, expired or tampered credentials return 401. Logout revokes the presented refresh session and clears both cookies; repeating logout is safe. Existing access JWTs remain valid until their short expiry, including after logout or reuse detection; session revocation prevents further refresh, not already issued access JWT use.
+
+## Current database authorization
+
+After verifying an access JWT, `authenticate` uses its `sub` only to load the current user's id and role from the database and sets `req.user = { id, role }`. Role claims in JWTs are not used for authorization. Every protected route, including comments, uses this current database identity. Demotions apply on the next request with the same still-valid token; a deleted user receives 401 in the standard error envelope.
+
+This deliberately adds one indexed user lookup per authenticated request. The extra query and database dependency trade a small amount of latency for immediate role/deletion enforcement; there is no role cache. Endpoint-specific queries, such as fetching the public profile for `/users/me`, still run separately. Logout/session revocation semantics above are unchanged for users who still exist.

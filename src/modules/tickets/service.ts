@@ -11,11 +11,11 @@ import { getPagination } from "../../lib/pagination.js";
 import type { listTicketsRequestSchema } from "./schemas.js";
 import { badRequest, forbidden, notFound } from "../../lib/app-error.js";
 
-export type Actor = { userId: string; role: Role };
+export type Actor = { id: string; role: Role };
 export type TicketRecord = typeof tickets.$inferSelect;
 
 function assertCanRead(ticket: TicketRecord, actor: Actor): void {
-  if (actor.role === "USER" && ticket.createdBy !== actor.userId) {
+  if (actor.role === "USER" && ticket.createdBy !== actor.id) {
     throw notFound("Ticket was not found");
   }
 }
@@ -26,8 +26,7 @@ export async function listTickets(
 ) {
   const pagination = getPagination(filters);
   const conditions: SQL[] = [];
-  if (actor.role === "USER")
-    conditions.push(eq(tickets.createdBy, actor.userId));
+  if (actor.role === "USER") conditions.push(eq(tickets.createdBy, actor.id));
   if (filters.status) conditions.push(eq(tickets.status, filters.status));
   if (filters.priority) conditions.push(eq(tickets.priority, filters.priority));
   if (actor.role !== "USER" && filters.createdBy)
@@ -84,7 +83,7 @@ export async function createTicket(
 ): Promise<TicketRecord> {
   const [ticket] = await db
     .insert(tickets)
-    .values({ ...input, createdBy: actor.userId })
+    .values({ ...input, createdBy: actor.id })
     .returning();
   if (!ticket) throw new Error("Ticket insert did not return a row");
   return ticket;

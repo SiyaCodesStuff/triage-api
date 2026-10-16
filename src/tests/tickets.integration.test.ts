@@ -309,6 +309,11 @@ describe("ticket authorization and lifecycle", () => {
         .where(eq(users.id, accounts[role].id));
       try {
         const auth = `Bearer ${accounts[role].token}`;
+        const comments = await request(app)
+          .get(`/api/v1/tickets/${foreign.id}/comments`)
+          .set("Authorization", auth);
+        expect(comments.status).toBe(404);
+        expect(comments.body.error.code).toBe("NOT_FOUND");
         expect(
           (
             await request(app)
