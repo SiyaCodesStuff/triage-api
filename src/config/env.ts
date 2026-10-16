@@ -5,6 +5,7 @@ const environmentSchema = z
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
+    TRUST_PROXY: z.coerce.number().int().min(0).default(0),
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     DATABASE_URL: z
       .url()

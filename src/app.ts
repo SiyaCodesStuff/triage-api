@@ -24,6 +24,8 @@ const noRequestDataSchema = z.strictObject({
 
 export const app = express();
 
+app.set("trust proxy", env.TRUST_PROXY);
+
 app.disable("x-powered-by");
 app.use(
   pinoHttp({

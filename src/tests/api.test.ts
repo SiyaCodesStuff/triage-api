@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import request from "supertest";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { env } from "../config/env.js";
 import { app } from "../app.js";
 
@@ -86,4 +86,36 @@ describe("triage-api request handling", () => {
       .send({ title: "x", description: "", extra: true });
     expect(invalidBody.status).toBe(400);
   });
+});
+
+describe("proxy trust", () => {
+  it.each([0, 1])(
+    "honours X-Forwarded-For only when TRUST_PROXY is positive (%i)",
+    async (trustProxy) => {
+      vi.resetModules();
+      vi.stubEnv("TRUST_PROXY", String(trustProxy));
+      try {
+        const { app: proxyApp } = await import("../app.js");
+        expect(proxyApp.get("trust proxy")).toBe(trustProxy);
+
+        const first = await request(proxyApp)
+          .get("/openapi.json")
+          .set("X-Forwarded-For", "192.0.2.1");
+        const second = await request(proxyApp)
+          .get("/openapi.json")
+          .set("X-Forwarded-For", "192.0.2.2");
+
+        expect(first.status).toBe(200);
+        expect(second.status).toBe(200);
+        const remaining = (header: string) => Number(/r=(\d+)/.exec(header)?.[1]);
+        expect(remaining(first.headers.ratelimit)).toBe(299);
+        expect(remaining(second.headers.ratelimit)).toBe(
+          trustProxy > 0 ? 299 : 298,
+        );
+      } finally {
+        vi.unstubAllEnvs();
+        vi.resetModules();
+      }
+    },
+  );
 });
