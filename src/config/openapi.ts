@@ -5,7 +5,7 @@ export const openApiDocument = {
     version: "1.0.0",
     description: "REST API for support users, tickets, and ticket comments.",
   },
-  servers: [{ url: "/api" }],
+  servers: [{ url: "/api/v1" }],
   components: {
     securitySchemes: {
       accessCookie: { type: "apiKey", in: "cookie", name: "triage_access" },

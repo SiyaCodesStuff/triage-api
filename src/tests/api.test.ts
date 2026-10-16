@@ -3,6 +3,9 @@ import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { env } from "../config/env.js";
 import { app } from "../app.js";
+import { pool } from "../db/client.js";
+import { clearAuthCookies, setAuthCookies } from "../lib/cookies.js";
+import express from "express";
 
 const accessToken = jwt.sign(
   { role: "USER", type: "access" },
@@ -31,6 +34,96 @@ describe("triage-api request handling", () => {
     expect(docsUi.text).toContain("swagger-ui");
   });
 
+  it("publishes paths relative to the versioned OpenAPI server", async () => {
+    const response = await request(app).get("/openapi.json");
+    expect(response.body.servers).toEqual([{ url: "/api/v1" }]);
+    expect(Object.keys(response.body.paths).sort()).toEqual(
+      [
+        "/auth/login",
+        "/auth/logout",
+        "/auth/refresh",
+        "/auth/register",
+        "/tickets",
+        "/tickets/{ticketId}",
+        "/tickets/{ticketId}/comments",
+        "/users",
+        "/users/me",
+        "/users/{userId}/role",
+      ].sort(),
+    );
+  });
+
+  it.each([
+    "/users/me",
+    "/tickets",
+    "/tickets/2a34a77e-b59b-4cba-8b0a-b28ae7b4f4e9/comments",
+  ])("mounts the protected router at /api/v1%s", async (path) => {
+    const response = await request(app).get(`/api/v1${path}`);
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("UNAUTHORIZED");
+  });
+
+  it.each([
+    ["get", "/api/users/me"],
+    ["get", "/api/tickets"],
+    ["get", "/api/tickets/example/comments"],
+    ["post", "/api/auth/register"],
+    ["get", "/api/v1/health"],
+    ["get", "/api/v1/ready"],
+    ["get", "/api/v1/docs"],
+    ["get", "/api/v1/openapi.json"],
+  ] as const)(
+    "rejects the obsolete or versioned operational route %s %s",
+    async (method, path) => {
+      const response = await request(app)
+        [method](path)
+        .set("Authorization", `Bearer ${accessToken}`);
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe("NOT_FOUND");
+    },
+  );
+
+  it("keeps readiness unversioned", async () => {
+    const query = vi
+      .spyOn(pool, "query")
+      .mockRejectedValueOnce(new Error("unavailable"));
+    try {
+      const response = await request(app).get("/ready");
+      expect(response.status).toBe(503);
+      expect(response.body).toEqual({
+        error: {
+          code: "NOT_READY",
+          message: "The database is not available",
+        },
+      });
+      expect(query).toHaveBeenCalledWith("SELECT 1");
+    } finally {
+      query.mockRestore();
+    }
+  });
+
+  it("sets and clears refresh cookies at the versioned auth path", async () => {
+    const cookieApp = express();
+    cookieApp.post("/set", (_req, res) => {
+      setAuthCookies(res, "test-access", "test-refresh");
+      res.sendStatus(204);
+    });
+    cookieApp.post("/clear", (_req, res) => {
+      clearAuthCookies(res);
+      res.sendStatus(204);
+    });
+    for (const path of ["/set", "/clear"]) {
+      const response = await request(cookieApp).post(path);
+      const cookies = response.headers["set-cookie"] as unknown as string[];
+      expect(
+        cookies.find((cookie) => cookie.startsWith("triage_refresh=")),
+      ).toContain("Path=/api/v1/auth;");
+      expect(
+        cookies.find((cookie) => cookie.startsWith("triage_access=")),
+      ).toContain("Path=/;");
+    }
+  });
+
   it("ignores query strings on the health route", async () => {
     const health = await request(app).get("/health?x=1");
     expect(health.status).toBe(200);
@@ -52,7 +145,7 @@ describe("triage-api request handling", () => {
   });
 
   it("returns consistent errors for missing auth and malformed request data", async () => {
-    const unauthenticated = await request(app).get("/api/tickets");
+    const unauthenticated = await request(app).get("/api/v1/tickets");
     expect(unauthenticated.status).toBe(401);
     expect(unauthenticated.body.error).toMatchObject({
       code: "UNAUTHORIZED",
@@ -60,7 +153,7 @@ describe("triage-api request handling", () => {
     });
 
     const invalidRegistration = await request(app)
-      .post("/api/auth/register")
+      .post("/api/v1/auth/register")
       .send({
         name: "Bad User",
         email: "not-an-email",
@@ -71,17 +164,17 @@ describe("triage-api request handling", () => {
     expect(invalidRegistration.body.error.code).toBe("VALIDATION_ERROR");
 
     const invalidQuery = await request(app)
-      .get("/api/tickets?unexpected=value")
+      .get("/api/v1/tickets?unexpected=value")
       .set("Authorization", `Bearer ${accessToken}`);
     expect(invalidQuery.status).toBe(400);
 
     const invalidParams = await request(app)
-      .get("/api/tickets/not-a-uuid")
+      .get("/api/v1/tickets/not-a-uuid")
       .set("Authorization", `Bearer ${accessToken}`);
     expect(invalidParams.status).toBe(400);
 
     const invalidBody = await request(app)
-      .post("/api/tickets")
+      .post("/api/v1/tickets")
       .set("Authorization", `Bearer ${accessToken}`)
       .send({ title: "x", description: "", extra: true });
     expect(invalidBody.status).toBe(400);
@@ -107,7 +200,8 @@ describe("proxy trust", () => {
 
         expect(first.status).toBe(200);
         expect(second.status).toBe(200);
-        const remaining = (header: string) => Number(/r=(\d+)/.exec(header)?.[1]);
+        const remaining = (header: string) =>
+          Number(/r=(\d+)/.exec(header)?.[1]);
         expect(remaining(first.headers.ratelimit)).toBe(299);
         expect(remaining(second.headers.ratelimit)).toBe(
           trustProxy > 0 ? 299 : 298,

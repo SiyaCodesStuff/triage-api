@@ -36,7 +36,7 @@ export function setAuthCookies(
   });
   response.cookie("triage_refresh", refreshToken, {
     ...common,
-    path: "/api/auth",
+    path: "/api/v1/auth",
     maxAge: durationToMs(env.REFRESH_TOKEN_TTL),
   });
 }
@@ -48,7 +48,7 @@ export function clearAuthCookies(response: Response): void {
     sameSite: "strict" as const,
   };
   response.clearCookie("triage_access", { ...common, path: "/" });
-  response.clearCookie("triage_refresh", { ...common, path: "/api/auth" });
+  response.clearCookie("triage_refresh", { ...common, path: "/api/v1/auth" });
 }
 
 function durationToMs(value: string): number {

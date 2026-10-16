@@ -85,10 +85,10 @@ app.get(
 );
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
-app.use("/api/auth", authRouter);
-app.use("/api/users", usersRouter);
-app.use("/api/tickets", ticketsRouter);
-app.use("/api", commentsRouter);
+app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/users", usersRouter);
+app.use("/api/v1/tickets", ticketsRouter);
+app.use("/api/v1", commentsRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
