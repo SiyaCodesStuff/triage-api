@@ -10,3 +10,7 @@
 - Seed credentials are required only by `db:seed`; passwords are hashed and existing admins are preserved. Production seeding requires `--allow-production`. See the [README](README.md).
 
 Deployment deliberately requires production HTTPS, strong distinct JWT secrets, restricted database access and careful origin/proxy configuration. Dependencies should be kept updated. The application does not provide a distributed rate-limit store or access-token logout blacklist.
+
+## Known limitations
+
+Rate-limit counters are stored in process memory, so limits reset on restart and are enforced per instance rather than globally. Running multiple replicas requires a shared store, for example Redis via `rate-limit-redis`. Adding a shared store is planned for when the app is scaled out.
