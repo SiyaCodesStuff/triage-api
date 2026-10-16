@@ -9,6 +9,7 @@ import { logger } from "./config/logger.js";
 import { openApiDocument } from "./config/openapi.js";
 import { pool } from "./db/client.js";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
+import { requireCsrf } from "./middleware/require-csrf.js";
 import { validateRequest } from "./middleware/validate-request.js";
 import { authRouter } from "./modules/auth/routes.js";
 import { commentsRouter } from "./modules/comments/routes.js";
@@ -84,6 +85,8 @@ app.get(
   },
 );
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
+
+app.use("/api/v1", requireCsrf);
 
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/users", usersRouter);

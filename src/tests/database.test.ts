@@ -1,10 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
+import { createHash } from "node:crypto";
+import argon2 from "argon2";
 import { eq } from "drizzle-orm";
 import { app } from "../app.js";
 import { db, pool } from "../db/client.js";
 import { register, login } from "../modules/auth/service.js";
-import { tickets, users } from "../db/schema.js";
+import { refreshSessions, tickets, users } from "../db/schema.js";
 
 describe("triage-api database flows", () => {
   const api = request.agent(app);
@@ -14,11 +16,14 @@ describe("triage-api database flows", () => {
   let registrationCookies: string[] = [];
 
   beforeAll(async () => {
-    const response = await api.post("/api/v1/auth/register").send({
-      name: "API Test User",
-      email,
-      password: "correct horse battery staple",
-    });
+    const response = await api
+      .post("/api/v1/auth/register")
+      .set("X-CSRF-Protection", "1")
+      .send({
+        name: "API Test User",
+        email,
+        password: "correct horse battery staple",
+      });
     expect(response.status).toBe(201);
     const setCookie = response.headers["set-cookie"];
     registrationCookies = Array.isArray(setCookie)
@@ -35,6 +40,142 @@ describe("triage-api database flows", () => {
     await pool.end();
   });
 
+  it("registers a ten-character password with argon2id and secure cookie policy", async () => {
+    const address = `auth-${crypto.randomUUID()}@example.test`;
+    const agent = request.agent(app);
+    let id: string | undefined;
+    try {
+      const response = await agent
+        .post("/api/v1/auth/register")
+        .set("X-CSRF-Protection", "1")
+        .send({
+          name: "Auth test",
+          email: address.toUpperCase(),
+          password: "1234567890",
+        });
+      expect(response.status).toBe(201);
+      id = response.body.data.id;
+      expect(response.body.data.email).toBe(address);
+      expect(Object.keys(response.body.data).sort()).toEqual(
+        ["id", "name", "email", "role", "createdAt", "updatedAt"].sort(),
+      );
+      const [stored] = await db.select().from(users).where(eq(users.id, id!));
+      expect(stored.passwordHash.startsWith("$argon2id$")).toBe(true);
+      expect(await argon2.verify(stored.passwordHash, "1234567890")).toBe(true);
+      for (const cookie of response.headers[
+        "set-cookie"
+      ] as unknown as string[]) {
+        expect(cookie.includes("HttpOnly")).toBe(true);
+        expect(cookie.includes("SameSite=Strict")).toBe(true);
+      }
+      expect((await agent.get("/api/v1/users/me")).status).toBe(200);
+      const logout = await agent
+        .post("/api/v1/auth/logout")
+        .set("X-CSRF-Protection", "1");
+      expect(logout.status).toBe(204);
+      expect((await agent.get("/api/v1/users/me")).status).toBe(401);
+      const [session] = await db
+        .select()
+        .from(refreshSessions)
+        .where(eq(refreshSessions.userId, id!));
+      expect(session.revokedAt !== null).toBe(true);
+    } finally {
+      if (id) await db.delete(users).where(eq(users.id, id));
+    }
+  });
+
+  it("returns identical login errors for unknown emails and wrong passwords", async () => {
+    const wrong = await request(app)
+      .post("/api/v1/auth/login")
+      .set("X-CSRF-Protection", "1")
+      .send({ email, password: "wrong password" });
+    const unknown = await request(app)
+      .post("/api/v1/auth/login")
+      .set("X-CSRF-Protection", "1")
+      .send({
+        email: `unknown-${crypto.randomUUID()}@example.test`,
+        password: "wrong password",
+      });
+    expect(wrong.status).toBe(401);
+    expect(unknown.status).toBe(401);
+    expect(wrong.body).toEqual(unknown.body);
+    expect(wrong.body.error.code).toBe("UNAUTHORIZED");
+  });
+
+  it("rotates hashed refresh tokens and commits revocation of every session on reuse", async () => {
+    const account = await register({
+      name: "Rotation test",
+      email: `rotate-${crypto.randomUUID()}@example.test`,
+      password: "correct horse battery staple",
+    });
+    const cookie = (token: string) => `triage_refresh=${token}`;
+    try {
+      const loginResponse = await request(app)
+        .post("/api/v1/auth/login")
+        .set("X-CSRF-Protection", "1")
+        .send({
+          email: account.user.email.toUpperCase(),
+          password: "correct horse battery staple",
+        });
+      expect(loginResponse.status).toBe(200);
+      const sessions = await db
+        .select()
+        .from(refreshSessions)
+        .where(eq(refreshSessions.userId, account.user.id));
+      const originalHash = createHash("sha256")
+        .update(account.tokens.refreshToken)
+        .digest("hex");
+      expect(
+        sessions.some((session) => session.tokenHash === originalHash),
+      ).toBe(true);
+      expect(
+        sessions.every((session) => /^[a-f0-9]{64}$/.test(session.tokenHash)),
+      ).toBe(true);
+      const rotated = await request(app)
+        .post("/api/v1/auth/refresh")
+        .set("X-CSRF-Protection", "1")
+        .set("Cookie", cookie(account.tokens.refreshToken));
+      expect(rotated.status).toBe(200);
+      const refreshCookie = (
+        rotated.headers["set-cookie"] as unknown as string[]
+      ).find((value) => value.startsWith("triage_refresh="))!;
+      const nextToken = refreshCookie
+        .split(";")[0]
+        .slice("triage_refresh=".length);
+      expect(nextToken !== account.tokens.refreshToken).toBe(true);
+      const afterRotation = await db
+        .select()
+        .from(refreshSessions)
+        .where(eq(refreshSessions.userId, account.user.id));
+      expect(
+        afterRotation.find((session) => session.tokenHash === originalHash)
+          ?.revokedAt !== null,
+      ).toBe(true);
+      expect(
+        afterRotation.filter((session) => session.revokedAt === null),
+      ).toHaveLength(2);
+      const replay = await request(app)
+        .post("/api/v1/auth/refresh")
+        .set("X-CSRF-Protection", "1")
+        .set("Cookie", cookie(account.tokens.refreshToken));
+      expect(replay.status).toBe(401);
+      const afterReplay = await db
+        .select()
+        .from(refreshSessions)
+        .where(eq(refreshSessions.userId, account.user.id));
+      expect(afterReplay.every((session) => session.revokedAt !== null)).toBe(
+        true,
+      );
+      const rejected = await request(app)
+        .post("/api/v1/auth/refresh")
+        .set("X-CSRF-Protection", "1")
+        .set("Cookie", cookie(nextToken));
+      expect(rejected.status).toBe(401);
+    } finally {
+      await db.delete(users).where(eq(users.id, account.user.id));
+    }
+  });
+
   it("normalises service emails and rejects mixed-case duplicates through the API and database", async () => {
     const mixedEmail = `Mixed-${crypto.randomUUID()}@Example.Test`;
     const registered = await register({
@@ -49,11 +190,14 @@ describe("triage-api database flows", () => {
         "correct horse battery staple",
       );
       expect(signedIn.user.id).toBe(registered.user.id);
-      const duplicate = await request(app).post("/api/v1/auth/register").send({
-        name: "Duplicate",
-        email: mixedEmail.toUpperCase(),
-        password: "correct horse battery staple",
-      });
+      const duplicate = await request(app)
+        .post("/api/v1/auth/register")
+        .set("X-CSRF-Protection", "1")
+        .send({
+          name: "Duplicate",
+          email: mixedEmail.toUpperCase(),
+          password: "correct horse battery staple",
+        });
       expect(duplicate.status).toBe(409);
       expect(duplicate.body.error.code).toBe("CONFLICT");
       await expect(
@@ -167,7 +311,10 @@ describe("triage-api database flows", () => {
   });
 
   it("keeps credentials out of responses and supports ticket comments", async () => {
-    const refreshed = await api.post("/api/v1/auth/refresh").send({});
+    const refreshed = await api
+      .post("/api/v1/auth/refresh")
+      .set("X-CSRF-Protection", "1")
+      .send({});
     expect(refreshed.status).toBe(200);
 
     const currentUser = await api.get("/api/v1/users/me");
@@ -179,16 +326,20 @@ describe("triage-api database flows", () => {
       expect.arrayContaining([expect.stringContaining("HttpOnly")]),
     );
 
-    const created = await api.post("/api/v1/tickets").send({
-      title: "Cannot access student portal",
-      description: "The portal returns an error after sign in.",
-      priority: "HIGH",
-    });
+    const created = await api
+      .post("/api/v1/tickets")
+      .set("X-CSRF-Protection", "1")
+      .send({
+        title: "Cannot access student portal",
+        description: "The portal returns an error after sign in.",
+        priority: "HIGH",
+      });
     expect(created.status).toBe(201);
     ticketId = created.body.data.id as string;
 
     const forbiddenUpdate = await api
       .patch(`/api/v1/tickets/${ticketId}`)
+      .set("X-CSRF-Protection", "1")
       .send({
         status: "RESOLVED",
       });
@@ -196,6 +347,7 @@ describe("triage-api database flows", () => {
 
     const comment = await api
       .post(`/api/v1/tickets/${ticketId}/comments`)
+      .set("X-CSRF-Protection", "1")
       .send({ body: "I can provide a screenshot." });
     expect(comment.status).toBe(201);
 
@@ -204,7 +356,10 @@ describe("triage-api database flows", () => {
     expect(comments.body.data.total).toBe(1);
     expect(comments.body.data.data[0].author.id).toBe(userId);
 
-    const logout = await api.post("/api/v1/auth/logout").send({});
+    const logout = await api
+      .post("/api/v1/auth/logout")
+      .set("X-CSRF-Protection", "1")
+      .send({});
     expect(logout.status).toBe(204);
     const afterLogout = await api.get("/api/v1/users/me");
     expect(afterLogout.status).toBe(401);

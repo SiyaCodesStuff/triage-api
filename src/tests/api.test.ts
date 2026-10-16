@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { env } from "../config/env.js";
+import { openApiDocument } from "../config/openapi.js";
 import { app } from "../app.js";
 import { pool } from "../db/client.js";
 import { clearAuthCookies, setAuthCookies } from "../lib/cookies.js";
@@ -51,6 +52,24 @@ describe("triage-api request handling", () => {
         "/users/{userId}/role",
       ].sort(),
     );
+  });
+
+  it("documents the CSRF header for every state-changing OpenAPI operation", () => {
+    expect(openApiDocument.components.parameters.csrfProtection).toMatchObject({
+      name: "X-CSRF-Protection",
+      in: "header",
+      required: true,
+      schema: { enum: ["1"] },
+    });
+    for (const path of Object.values(openApiDocument.paths)) {
+      for (const [method, operation] of Object.entries(path)) {
+        if (["post", "patch", "delete", "put"].includes(method)) {
+          expect(operation).toHaveProperty("parameters", [
+            { $ref: "#/components/parameters/csrfProtection" },
+          ]);
+        }
+      }
+    }
   });
 
   it.each([
@@ -113,7 +132,9 @@ describe("triage-api request handling", () => {
       res.sendStatus(204);
     });
     for (const path of ["/set", "/clear"]) {
-      const response = await request(cookieApp).post(path);
+      const response = await request(cookieApp)
+        .post(path)
+        .set("X-CSRF-Protection", "1");
       const cookies = response.headers["set-cookie"] as unknown as string[];
       expect(
         cookies.find((cookie) => cookie.startsWith("triage_refresh=")),
@@ -121,6 +142,135 @@ describe("triage-api request handling", () => {
       expect(
         cookies.find((cookie) => cookie.startsWith("triage_access=")),
       ).toContain("Path=/;");
+    }
+  });
+
+  it.each([
+    "/auth/register",
+    "/auth/login",
+    "/auth/refresh",
+    "/auth/logout",
+    "/tickets",
+  ])("rejects a missing CSRF header on POST %s", async (path) => {
+    const response = await request(app).post(`/api/v1${path}`).send({});
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe("CSRF_REQUIRED");
+  });
+
+  it("rejects missing credentials and passwords shorter than ten characters", async () => {
+    expect((await request(app).get("/api/v1/users/me")).status).toBe(401);
+    const refresh = await request(app)
+      .post("/api/v1/auth/refresh")
+      .set("X-CSRF-Protection", "1");
+    expect(refresh.status).toBe(401);
+    const registration = await request(app)
+      .post("/api/v1/auth/register")
+      .set("X-CSRF-Protection", "1")
+      .send({
+        name: "Test",
+        email: "test@example.test",
+        password: "123456789",
+      });
+    expect(registration.status).toBe(400);
+    expect(registration.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it.each(["access", "refresh"] as const)(
+    "rejects expired and tampered %s credentials",
+    async (type) => {
+      const secret =
+        type === "access" ? env.JWT_ACCESS_SECRET : env.JWT_REFRESH_SECRET;
+      const expired = jwt.sign({ role: "USER", type }, secret, {
+        subject: "2a34a77e-b59b-4cba-8b0a-b28ae7b4f4e9",
+        jwtid: "expired-test",
+        issuer: "triage-api",
+        audience: "triage-api-client",
+        expiresIn: -1,
+      });
+      const tampered = jwt.sign(
+        { role: "USER", type },
+        "incorrect-signing-secret",
+        {
+          subject: "2a34a77e-b59b-4cba-8b0a-b28ae7b4f4e9",
+          jwtid: "tampered-test",
+          issuer: "triage-api",
+          audience: "triage-api-client",
+          expiresIn: "5m",
+        },
+      );
+      for (const token of [expired, tampered]) {
+        const response =
+          type === "access"
+            ? await request(app)
+                .get("/api/v1/users/me")
+                .set("Authorization", `Bearer ${token}`)
+            : await request(app)
+                .post("/api/v1/auth/refresh")
+                .set("X-CSRF-Protection", "1")
+                .set("Cookie", `triage_refresh=${token}`);
+        expect(response.status).toBe(401);
+        expect(response.body.error.code).toBe("UNAUTHORIZED");
+      }
+    },
+  );
+
+  it("uses Secure, HttpOnly and SameSite=Strict for production cookies", async () => {
+    vi.resetModules();
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      const {
+        setAuthCookies: setProductionCookies,
+        clearAuthCookies: clearProductionCookies,
+      } = await import("../lib/cookies.js");
+      const cookieApp = express();
+      cookieApp.post("/set", (_req, res) => {
+        setProductionCookies(res, "test-access", "test-refresh");
+        res.sendStatus(204);
+      });
+      cookieApp.post("/clear", (_req, res) => {
+        clearProductionCookies(res);
+        res.sendStatus(204);
+      });
+      for (const path of ["/set", "/clear"]) {
+        const response = await request(cookieApp).post(path);
+        for (const cookie of response.headers[
+          "set-cookie"
+        ] as unknown as string[]) {
+          expect(cookie.includes("Secure")).toBe(true);
+          expect(cookie.includes("HttpOnly")).toBe(true);
+          expect(cookie.includes("SameSite=Strict")).toBe(true);
+        }
+      }
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
+
+  it("allows custom-header preflights only for configured CORS origins", async () => {
+    vi.resetModules();
+    vi.stubEnv("CORS_ORIGINS", "https://trusted.example");
+    try {
+      const { app: corsApp } = await import("../app.js");
+      for (const origin of [
+        "https://trusted.example",
+        "https://attacker.example",
+      ]) {
+        const response = await request(corsApp)
+          .options("/api/v1/auth/login")
+          .set("Origin", origin)
+          .set("Access-Control-Request-Method", "POST")
+          .set(
+            "Access-Control-Request-Headers",
+            "X-CSRF-Protection,Content-Type",
+          );
+        expect(response.headers["access-control-allow-origin"] === origin).toBe(
+          origin === "https://trusted.example",
+        );
+      }
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
     }
   });
 
@@ -154,6 +304,7 @@ describe("triage-api request handling", () => {
 
     const invalidRegistration = await request(app)
       .post("/api/v1/auth/register")
+      .set("X-CSRF-Protection", "1")
       .send({
         name: "Bad User",
         email: "not-an-email",
@@ -175,6 +326,7 @@ describe("triage-api request handling", () => {
 
     const invalidBody = await request(app)
       .post("/api/v1/tickets")
+      .set("X-CSRF-Protection", "1")
       .set("Authorization", `Bearer ${accessToken}`)
       .send({ title: "x", description: "", extra: true });
     expect(invalidBody.status).toBe(400);
