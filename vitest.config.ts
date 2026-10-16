@@ -9,6 +9,7 @@ export default defineConfig({
       "src/tests/security.test.ts",
       "src/tests/openapi.test.ts",
       "src/tests/database-safety.test.ts",
+      "src/tests/shutdown.test.ts",
     ],
     setupFiles: ["./src/tests/setup.ts"],
     clearMocks: true,
