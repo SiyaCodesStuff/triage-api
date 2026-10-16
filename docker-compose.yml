@@ -2,9 +2,9 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-helpdesk}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-helpdesk}
-      POSTGRES_DB: ${POSTGRES_DB:-helpdesk}
+      POSTGRES_USER: ${POSTGRES_USER:-triage}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-triage}
+      POSTGRES_DB: ${POSTGRES_DB:-triage}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
