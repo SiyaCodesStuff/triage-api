@@ -1,0 +1,46 @@
+meta {
+  name: Register user
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/register
+  body: json
+  auth: none
+}
+
+headers {
+  X-CSRF-Protection: 1
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Bruno User",
+    "email": "{{email}}",
+    "password": "{{password}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("password")) throw new Error("Set password locally in the Local environment");
+  bru.setVar("email", `bruno-${Date.now()}@example.test`);
+}
+
+script:post-response {
+  if (res.getStatus() === 201) bru.setVar("userId", res.getBody().data.id);
+}
+
+tests {
+  test("Expected HTTP 201", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+  test("Success envelope", function () {
+    expect(res.getBody()).to.have.property("data");
+  });
+}
+
+docs {
+  Generates a unique email per run. Supply password locally (10–128 characters). Creates USER and sets both cookies.
+}

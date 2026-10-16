@@ -1,0 +1,25 @@
+meta {
+  name: Delete own comment
+  type: http
+  seq: 16
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/tickets/{{ticketId}}/comments/{{commentId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-CSRF-Protection: 1
+}
+
+tests {
+  test("Expected HTTP 204", function () {
+    expect(res.getStatus()).to.equal(204);
+  });
+}
+
+docs {
+  Comment author or ADMIN may delete. Ticket must be visible.
+}

@@ -1,0 +1,24 @@
+meta {
+  name: List tickets
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/v1/tickets?page=1&pageSize=20&status=OPEN&priority=MEDIUM&q=portal&sort=createdAt&order=desc
+  body: none
+  auth: none
+}
+
+tests {
+  test("Expected HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("Success envelope", function () {
+    expect(res.getBody()).to.have.property("data");
+  });
+}
+
+docs {
+  Filters combine with AND. Optional assignedTo/createdBy accept UUIDs. USERs always remain scoped to their own tickets; createdBy is ignored for them. Sort: createdAt|priority|status; order: asc|desc.
+}

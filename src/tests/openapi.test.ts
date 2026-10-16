@@ -1,3 +1,4 @@
+import { readFileSync, readdirSync } from "node:fs";
 import express from "express";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { openApiDocument } from "../config/openapi.js";
@@ -134,6 +135,30 @@ describe("generated OpenAPI coverage", () => {
     expect(actual).toContain("get /health");
     expect(actual).toContain("get /docs");
     expect(missingRoutes(router, mounts, document)).toEqual([]);
+
+    // Keep the runnable API collection in sync with all generated operations,
+    // including the Swagger asset middleware represented by a parameterized path.
+    const collection = new URL("../../docs/api-collection/", import.meta.url);
+    const requests = readdirSync(collection)
+      .filter((file) => file.endsWith(".bru"))
+      .map((file) => {
+        const source = readFileSync(new URL(file, collection), "utf8");
+        const request = source.match(
+          /^(get|post|patch|delete) \{\s+url: \{\{baseUrl\}\}([^\s?]+)/m,
+        );
+        expect(request, file).not.toBeNull();
+        const [, method, path] = request!;
+        if (["post", "patch", "delete"].includes(method))
+          expect(source, file).toMatch(/X-CSRF-Protection: 1/);
+        expect(source, file).toContain("tests {");
+        const normalized = path.replace(/\{\{(\w+)\}\}/g, "{$1}");
+        return `${method} ${normalized}`;
+      });
+    const documented = documentedRoutes(document);
+    expect(requests.filter((route) => !documented.has(route))).toEqual([]);
+    expect(
+      [...documented].filter((route) => !requests.includes(route)),
+    ).toEqual([]);
   });
 
   it("detects a newly registered undocumented route without changing a route list", () => {

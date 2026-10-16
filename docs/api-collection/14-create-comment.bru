@@ -1,0 +1,39 @@
+meta {
+  name: Create comment
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/api/v1/tickets/{{ticketId}}/comments
+  body: json
+  auth: none
+}
+
+headers {
+  X-CSRF-Protection: 1
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "body": "Reproduced after restarting the browser"
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 201) bru.setVar("commentId", res.getBody().data.id);
+}
+
+tests {
+  test("Expected HTTP 201", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+  test("Success envelope", function () {
+    expect(res.getBody()).to.have.property("data");
+  });
+}
+
+docs {
+  Requires ticket visibility. CLOSED tickets reject new comments with 409. Captures commentId.
+}

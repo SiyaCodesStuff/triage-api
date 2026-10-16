@@ -1,0 +1,24 @@
+meta {
+  name: List comments
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/api/v1/tickets/{{ticketId}}/comments?page=1&limit=50
+  body: none
+  auth: none
+}
+
+tests {
+  test("Expected HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("Success envelope", function () {
+    expect(res.getBody()).to.have.property("data");
+  });
+}
+
+docs {
+  Oldest first. Response pagination is nested inside data, with page/limit/total.
+}
