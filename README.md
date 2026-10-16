@@ -1,5 +1,7 @@
 # triage-api
 
+[![CI](https://github.com/SiyaCodesStuff/triage-api/actions/workflows/ci.yml/badge.svg)](https://github.com/SiyaCodesStuff/triage-api/actions/workflows/ci.yml)
+
 The API base URL is `/api/v1`. OpenAPI paths are relative to that server URL.
 
 | Router   | Endpoints                                                                                                                                                |
