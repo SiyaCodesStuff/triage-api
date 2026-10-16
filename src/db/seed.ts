@@ -1,10 +1,8 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import argon2 from "argon2";
-import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "./client.js";
-import { users } from "./schema.js";
+import { assertSeedAllowed } from "../lib/seed-production-guard.js";
 
 const seedSchema = z.object({
   ADMIN_EMAIL: z.string().trim().toLowerCase().max(254).pipe(z.email()),
@@ -16,12 +14,7 @@ export function readSeedConfiguration(
   environment: NodeJS.ProcessEnv,
   args: readonly string[],
 ): SeedConfiguration {
-  if (
-    environment.NODE_ENV === "production" &&
-    !args.includes("--allow-production")
-  ) {
-    throw new Error("Production seeding requires --allow-production");
-  }
+  assertSeedAllowed(environment, args);
   const parsed = seedSchema.safeParse(environment);
   if (!parsed.success)
     throw new Error(
@@ -34,6 +27,11 @@ export async function seedAdmin(
   database: Database,
   configuration: SeedConfiguration,
 ): Promise<"created" | "existing"> {
+  const [{ default: argon2 }, { eq, sql }, { users }] = await Promise.all([
+    import("argon2"),
+    import("drizzle-orm"),
+    import("./schema.js"),
+  ]);
   const email = configuration.ADMIN_EMAIL.trim().toLowerCase();
   const passwordHash = await argon2.hash(configuration.ADMIN_PASSWORD, {
     type: argon2.argon2id,
