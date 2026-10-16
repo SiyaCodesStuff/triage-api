@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import argon2 from "argon2";
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import jwt, { type JwtPayload, type SignOptions } from "jsonwebtoken";
 import { z } from "zod";
 import { env, durationToMilliseconds } from "../../config/env.js";
@@ -78,6 +78,7 @@ function parseClaims(
   const payload = jwt.verify(token, secret, {
     issuer: "triage-api",
     audience: "triage-api-client",
+    algorithms: ["HS256"],
   });
   if (typeof payload === "string")
     throw unauthorized("The credential is invalid or expired");
@@ -180,48 +181,54 @@ export async function refresh(
   if (claims.type !== "refresh")
     throw unauthorized("The refresh credential is invalid or expired");
 
-  return db.transaction(async (transaction) => {
+  const result = await db.transaction(async (transaction) => {
+    // Serialize refreshes for the entire user, including different devices.
+    const [user] = await transaction
+      .select()
+      .from(users)
+      .where(eq(users.id, claims.sub))
+      .for("update");
+    if (!user) return null;
+
     const [session] = await transaction
       .select()
       .from(refreshSessions)
       .where(
         and(
           eq(refreshSessions.tokenHash, hashToken(refreshToken)),
-          isNull(refreshSessions.revokedAt),
-          gt(refreshSessions.expiresAt, new Date()),
+          eq(refreshSessions.userId, user.id),
         ),
       )
       .limit(1)
       .for("update");
-    if (!session || session.userId !== claims.sub) {
-      throw unauthorized("The refresh credential is invalid or expired");
-    }
+    if (!session) return null;
 
-    const [revoked] = await transaction
+    if (session.revokedAt) {
+      // Return instead of throwing here so the revocation commits.
+      await transaction
+        .update(refreshSessions)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(refreshSessions.userId, user.id),
+            isNull(refreshSessions.revokedAt),
+          ),
+        );
+      return null;
+    }
+    if (session.expiresAt <= new Date()) return null;
+
+    await transaction
       .update(refreshSessions)
       .set({ revokedAt: new Date() })
-      .where(
-        and(
-          eq(refreshSessions.id, session.id),
-          isNull(refreshSessions.revokedAt),
-        ),
-      )
-      .returning({ id: refreshSessions.id });
-    if (!revoked)
-      throw unauthorized("The refresh credential has already been used");
-
-    const [user] = await transaction
-      .select()
-      .from(users)
-      .where(eq(users.id, session.userId))
-      .limit(1);
-    if (!user)
-      throw unauthorized("The account for this credential no longer exists");
-
+      .where(eq(refreshSessions.id, session.id));
     const tokens = tokenPair(user.id, user.role);
     await storeRefreshSession(transaction, user.id, tokens.refreshToken);
     return { user: toSafeUser(user), tokens };
   });
+  if (!result)
+    throw unauthorized("The refresh credential is invalid or expired");
+  return result;
 }
 
 export async function logout(refreshToken: string | undefined): Promise<void> {

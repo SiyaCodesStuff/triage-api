@@ -4,7 +4,7 @@ export const registerRequestSchema = z.strictObject({
   body: z.strictObject({
     name: z.string().trim().min(1).max(120),
     email: z.email().trim().toLowerCase().max(254),
-    password: z.string().min(12).max(128),
+    password: z.string().min(10).max(128),
   }),
   params: z.strictObject({}),
   query: z.strictObject({}),

@@ -7,6 +7,16 @@ export const openApiDocument = {
   },
   servers: [{ url: "/api/v1" }],
   components: {
+    parameters: {
+      csrfProtection: {
+        name: "X-CSRF-Protection",
+        in: "header",
+        required: true,
+        description:
+          "Required for all state-changing API requests (CSRF protection).",
+        schema: { type: "string", enum: ["1"], default: "1" },
+      },
+    },
     securitySchemes: {
       accessCookie: { type: "apiKey", in: "cookie", name: "triage_access" },
       bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
@@ -32,6 +42,7 @@ export const openApiDocument = {
   paths: {
     "/auth/register": {
       post: {
+        parameters: [{ $ref: "#/components/parameters/csrfProtection" }],
         summary: "Create a USER account",
         responses: {
           "201": { description: "Account created" },
@@ -41,6 +52,7 @@ export const openApiDocument = {
     },
     "/auth/login": {
       post: {
+        parameters: [{ $ref: "#/components/parameters/csrfProtection" }],
         summary: "Sign in",
         responses: {
           "200": {
@@ -52,6 +64,7 @@ export const openApiDocument = {
     },
     "/auth/refresh": {
       post: {
+        parameters: [{ $ref: "#/components/parameters/csrfProtection" }],
         summary: "Rotate the refresh credential",
         responses: {
           "200": { description: "Credentials rotated" },
@@ -61,6 +74,7 @@ export const openApiDocument = {
     },
     "/auth/logout": {
       post: {
+        parameters: [{ $ref: "#/components/parameters/csrfProtection" }],
         summary: "Revoke the current refresh session",
         responses: { "204": { description: "Session revoked" } },
       },
@@ -81,6 +95,7 @@ export const openApiDocument = {
     },
     "/users/{userId}/role": {
       patch: {
+        parameters: [{ $ref: "#/components/parameters/csrfProtection" }],
         summary: "Change a user's role (ADMIN)",
         security: [{ accessCookie: [] }, { bearerAuth: [] }],
         responses: { "200": { description: "Updated user" } },
@@ -93,6 +108,7 @@ export const openApiDocument = {
         responses: { "200": { description: "Ticket page" } },
       },
       post: {
+        parameters: [{ $ref: "#/components/parameters/csrfProtection" }],
         summary: "Create a ticket",
         security: [{ accessCookie: [] }, { bearerAuth: [] }],
         responses: { "201": { description: "Ticket created" } },
@@ -105,11 +121,13 @@ export const openApiDocument = {
         responses: { "200": { description: "Ticket" } },
       },
       patch: {
+        parameters: [{ $ref: "#/components/parameters/csrfProtection" }],
         summary: "Update a ticket",
         security: [{ accessCookie: [] }, { bearerAuth: [] }],
         responses: { "200": { description: "Updated ticket" } },
       },
       delete: {
+        parameters: [{ $ref: "#/components/parameters/csrfProtection" }],
         summary: "Delete a ticket (ADMIN)",
         security: [{ accessCookie: [] }, { bearerAuth: [] }],
         responses: { "204": { description: "Ticket deleted" } },
@@ -122,6 +140,7 @@ export const openApiDocument = {
         responses: { "200": { description: "Comment page" } },
       },
       post: {
+        parameters: [{ $ref: "#/components/parameters/csrfProtection" }],
         summary: "Add a ticket comment",
         security: [{ accessCookie: [] }, { bearerAuth: [] }],
         responses: { "201": { description: "Comment created" } },

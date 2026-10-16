@@ -33,3 +33,5 @@ npm run db:migrate:test
 ```
 
 Apply to the application database when ready with `npm run db:migrate`.
+
+Authentication and the required CSRF header are described in [docs/auth.md](docs/auth.md).
