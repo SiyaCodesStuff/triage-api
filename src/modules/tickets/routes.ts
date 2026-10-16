@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../../middleware/require-auth.js";
+import { authenticate } from "../../middleware/authenticate.js";
 import { validateRequest } from "../../middleware/validate-request.js";
 import * as controller from "./controller.js";
 import {
@@ -12,7 +12,7 @@ import {
 
 export const ticketsRouter = Router();
 
-ticketsRouter.use(requireAuth);
+ticketsRouter.use(authenticate);
 ticketsRouter.get(
   "/",
   validateRequest(listTicketsRequestSchema),

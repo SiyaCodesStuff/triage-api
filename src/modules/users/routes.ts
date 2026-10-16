@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../../middleware/require-auth.js";
+import { authenticate } from "../../middleware/authenticate.js";
 import { validateRequest } from "../../middleware/validate-request.js";
 import * as controller from "./controller.js";
 import {
@@ -13,20 +13,20 @@ export const usersRouter = Router();
 
 usersRouter.get(
   "/me",
-  requireAuth,
+  authenticate,
   validateRequest(getMeRequestSchema),
   controller.getMe,
 );
 usersRouter.get(
   "/",
-  requireAuth,
+  authenticate,
   controller.requireAdmin,
   validateRequest(listUsersRequestSchema),
   controller.list,
 );
 usersRouter.patch(
   "/:userId/role",
-  requireAuth,
+  authenticate,
   controller.requireAdmin,
   validateRequest(changeRoleRequestSchema),
   controller.updateRole,
@@ -34,7 +34,7 @@ usersRouter.patch(
 
 usersRouter.get(
   "/:userId",
-  requireAuth,
+  authenticate,
   controller.requireAdmin,
   validateRequest(getUserRequestSchema),
   controller.getById,

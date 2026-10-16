@@ -1,6 +1,5 @@
 import type { Request, RequestHandler } from "express";
 import { unauthorized } from "../../lib/app-error.js";
-import { getUser } from "../users/service.js";
 import * as service from "./service.js";
 import type {
   createTicketRequestSchema,
@@ -10,14 +9,13 @@ import type {
   updateTicketRequestSchema,
 } from "./schemas.js";
 
-async function currentActor(request: Request): Promise<service.Actor> {
-  if (!request.actor) throw unauthorized();
-  const user = await getUser(request.actor.userId);
-  return { userId: user.id, role: user.role };
+function currentActor(request: Request): service.Actor {
+  if (!request.user) throw unauthorized();
+  return request.user;
 }
 
 export const list: RequestHandler = async (request, response) => {
-  const actor = await currentActor(request);
+  const actor = currentActor(request);
   const { query } = request.validated as ReturnType<
     typeof listTicketsRequestSchema.parse
   >;
@@ -25,7 +23,7 @@ export const list: RequestHandler = async (request, response) => {
 };
 
 export const create: RequestHandler = async (request, response) => {
-  const actor = await currentActor(request);
+  const actor = currentActor(request);
   const { body } = request.validated as ReturnType<
     typeof createTicketRequestSchema.parse
   >;
@@ -33,7 +31,7 @@ export const create: RequestHandler = async (request, response) => {
 };
 
 export const get: RequestHandler = async (request, response) => {
-  const actor = await currentActor(request);
+  const actor = currentActor(request);
   const { params } = request.validated as ReturnType<
     typeof getTicketRequestSchema.parse
   >;
@@ -41,7 +39,7 @@ export const get: RequestHandler = async (request, response) => {
 };
 
 export const update: RequestHandler = async (request, response) => {
-  const actor = await currentActor(request);
+  const actor = currentActor(request);
   const { body, params } = request.validated as ReturnType<
     typeof updateTicketRequestSchema.parse
   >;
@@ -51,7 +49,7 @@ export const update: RequestHandler = async (request, response) => {
 };
 
 export const remove: RequestHandler = async (request, response) => {
-  const actor = await currentActor(request);
+  const actor = currentActor(request);
   const { params } = request.validated as ReturnType<
     typeof deleteTicketRequestSchema.parse
   >;

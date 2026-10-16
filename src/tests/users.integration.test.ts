@@ -25,15 +25,13 @@ describe("administrator user management and seeding", () => {
   beforeAll(async () => {
     for (const role of ["USER", "AGENT", "ADMIN"] as const) {
       const id = crypto.randomUUID();
-      await db
-        .insert(users)
-        .values({
-          id,
-          name: `${prefix} ${role}`,
-          email: `${prefix}-${role.toLowerCase()}@example.test`,
-          passwordHash: "unused-test-value",
-          role,
-        });
+      await db.insert(users).values({
+        id,
+        name: `${prefix} ${role}`,
+        email: `${prefix}-${role.toLowerCase()}@example.test`,
+        passwordHash: "unused-test-value",
+        role,
+      });
       ids.push(id);
       accounts[role] = {
         id,
@@ -202,22 +200,98 @@ describe("administrator user management and seeding", () => {
     ).toBe(404);
   });
 
-  it("rejects an old ADMIN JWT after database demotion", async () => {
+  it("an ADMIN demoted to USER immediately gets 403 with the same still-valid access token", async () => {
+    const auth = `Bearer ${accounts.ADMIN.token}`;
+    expect(
+      (await request(app).get("/api/v1/users").set("Authorization", auth))
+        .status,
+    ).toBe(200);
     await db
       .update(users)
-      .set({ role: "AGENT" })
+      .set({ role: "USER" })
       .where(eq(users.id, accounts.ADMIN.id));
     try {
+      expect(() =>
+        jwt.verify(accounts.ADMIN.token, env.JWT_ACCESS_SECRET),
+      ).not.toThrow();
       const response = await request(app)
         .get("/api/v1/users")
-        .set("Authorization", `Bearer ${accounts.ADMIN.token}`);
+        .set("Authorization", auth);
       expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe("FORBIDDEN");
+      const me = await request(app)
+        .get("/api/v1/users/me")
+        .set("Authorization", auth);
+      expect(me.status).toBe(200);
+      expect(me.body.data.role).toBe("USER");
     } finally {
       await db
         .update(users)
         .set({ role: "ADMIN" })
         .where(eq(users.id, accounts.ADMIN.id));
     }
+  });
+
+  it.each(["bearer", "cookie"])(
+    "returns the standard 401 for a deleted user's still-valid %s credential",
+    async (transport) => {
+      const id = crypto.randomUUID();
+      await db
+        .insert(users)
+        .values({
+          id,
+          name: "Deleted test user",
+          email: `${id}@example.test`,
+          passwordHash: "unused-test-value",
+        });
+      ids.push(id);
+      const token = jwt.sign(
+        { role: "ADMIN", type: "access" },
+        env.JWT_ACCESS_SECRET,
+        {
+          subject: id,
+          jwtid: crypto.randomUUID(),
+          issuer: "triage-api",
+          audience: "triage-api-client",
+          expiresIn: "5m",
+        },
+      );
+      await db.delete(users).where(eq(users.id, id));
+      for (const path of [
+        "/api/v1/users/me",
+        "/api/v1/users",
+        "/api/v1/tickets",
+        `/api/v1/tickets/${crypto.randomUUID()}/comments`,
+      ]) {
+        const response = await request(app)
+          .get(path)
+          .set(
+            transport === "bearer" ? "Authorization" : "Cookie",
+            transport === "bearer"
+              ? `Bearer ${token}`
+              : `triage_access=${token}`,
+          );
+        expect(response.status).toBe(401);
+        expect(response.body).toEqual({
+          error: {
+            code: "UNAUTHORIZED",
+            message: "Authentication is required",
+          },
+        });
+      }
+    },
+  );
+
+  it("a normal authenticated request still returns the current public profile", async () => {
+    const response = await request(app)
+      .get("/api/v1/users/me")
+      .set("Authorization", `Bearer ${accounts.USER.token}`);
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({
+      id: accounts.USER.id,
+      role: "USER",
+    });
+    expect(Object.keys(response.body.data).sort()).toEqual(publicKeys);
   });
 
   it("seeds one lowercase Argon2id admin idempotently without resetting its password", async () => {

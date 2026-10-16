@@ -61,7 +61,7 @@ export async function createComment(
   await getTicket(ticketId, actor);
   const [comment] = await db
     .insert(comments)
-    .values({ ticketId, authorId: actor.userId, body })
+    .values({ ticketId, authorId: actor.id, body })
     .returning({
       id: comments.id,
       ticketId: comments.ticketId,

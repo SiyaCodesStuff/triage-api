@@ -8,6 +8,23 @@ import { pool } from "../db/client.js";
 import { clearAuthCookies, setAuthCookies } from "../lib/cookies.js";
 import express from "express";
 
+// HTTP validation tests use an existing USER; real lookups and role changes
+// are covered by the database-backed integration suite.
+vi.mock("../db/client.js", () => ({
+  db: {
+    select: vi.fn(() => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => [
+            { id: "2a34a77e-b59b-4cba-8b0a-b28ae7b4f4e9", role: "USER" },
+          ],
+        }),
+      }),
+    })),
+  },
+  pool: { query: vi.fn() },
+}));
+
 const accessToken = jwt.sign(
   { role: "USER", type: "access" },
   env.JWT_ACCESS_SECRET,
