@@ -97,45 +97,72 @@ export async function updateTicket(
     assignedTo?: string | null;
   },
 ): Promise<TicketRecord> {
-  const ticket = await getTicket(ticketId, actor);
-  const staff = actor.role === "AGENT" || actor.role === "ADMIN";
-  if (
-    !staff &&
-    (changes.status !== undefined ||
-      changes.priority !== undefined ||
-      changes.assignedTo !== undefined)
-  ) {
-    throw forbidden(
-      "Only agents and administrators can change ticket status, priority, or assignment",
-    );
-  }
-
-  if (changes.assignedTo) {
-    const [assignee] = await db
-      .select({ role: users.role })
-      .from(users)
-      .where(eq(users.id, changes.assignedTo))
-      .limit(1);
-    if (!assignee) throw badRequest("The selected assignee does not exist");
-    if (assignee.role === "USER")
-      throw badRequest(
-        "Tickets can only be assigned to agents or administrators",
+  return db.transaction(async (transaction) => {
+    const [ticket] = await transaction
+      .select()
+      .from(tickets)
+      .where(eq(tickets.id, ticketId))
+      .for("update");
+    if (!ticket) throw notFound("Ticket was not found");
+    assertCanRead(ticket, actor);
+    const staff = actor.role === "AGENT" || actor.role === "ADMIN";
+    if (
+      !staff &&
+      (changes.status !== undefined ||
+        changes.priority !== undefined ||
+        changes.assignedTo !== undefined)
+    ) {
+      throw forbidden(
+        "Only agents and administrators can change ticket status, priority, or assignment",
       );
-  }
+    }
 
-  const [updated] = await db
-    .update(tickets)
-    .set({ ...changes, updatedAt: new Date() })
-    .where(eq(tickets.id, ticket.id))
-    .returning();
-  if (!updated) throw notFound("Ticket was not found");
-  return updated;
+    if (!staff && ticket.status !== "OPEN") {
+      throw forbidden("Users can only edit tickets while they are OPEN");
+    }
+    const transitions: Record<TicketStatus, readonly TicketStatus[]> = {
+      OPEN: ["IN_PROGRESS"],
+      IN_PROGRESS: ["RESOLVED"],
+      RESOLVED: ["CLOSED", "OPEN"],
+      CLOSED: [],
+    };
+    if (
+      changes.status !== undefined &&
+      !transitions[ticket.status].includes(changes.status)
+    ) {
+      throw badRequest(
+        `Cannot transition ticket from ${ticket.status} to ${changes.status}`,
+      );
+    }
+
+    if (changes.assignedTo) {
+      const [assignee] = await transaction
+        .select({ role: users.role })
+        .from(users)
+        .where(eq(users.id, changes.assignedTo))
+        .limit(1);
+      if (!assignee) throw badRequest("The selected assignee does not exist");
+      if (assignee.role === "USER")
+        throw badRequest(
+          "Tickets can only be assigned to agents or administrators",
+        );
+    }
+
+    const [updated] = await transaction
+      .update(tickets)
+      .set({ ...changes, updatedAt: new Date() })
+      .where(eq(tickets.id, ticket.id))
+      .returning();
+    if (!updated) throw notFound("Ticket was not found");
+    return updated;
+  });
 }
 
 export async function deleteTicket(
   ticketId: string,
   actor: Actor,
 ): Promise<void> {
+  if (actor.role === "USER") await getTicket(ticketId, actor);
   if (actor.role !== "ADMIN")
     throw forbidden("Only administrators can delete tickets");
   const [deleted] = await db

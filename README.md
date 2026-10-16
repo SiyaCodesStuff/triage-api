@@ -47,3 +47,11 @@ List users with `?page=1&limit=20&search=alice`. Search is an optional case-inse
 Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in the process environment (password: 10–128 characters), then run `npm run db:seed` against an already migrated database. No seed credentials are required for normal server startup. The command lowercases the email, hashes the password with Argon2id, and creates an ADMIN named Administrator. Repeated or concurrent runs for the same address preserve the existing admin and password. An existing non-admin account causes failure; it is never silently promoted.
 
 Production seeding is refused unless explicitly invoked with `npm run db:seed -- --allow-production`. Seed output never includes credentials or database error parameters. No automatic seeding runs on server startup.
+
+## Ticket permissions and lifecycle
+
+Ticket endpoints check the current database role, so demotion immediately applies even when an older access JWT has not expired.
+
+USERs create tickets owned by themselves, list/read only their own tickets, and edit only title/description while the ticket is OPEN. Requests for another user's ticket return 404, including PATCH and DELETE. USERs cannot change status, priority or assignment. AGENTs and ADMINs can list/read all tickets, change priority, and assign tickets to an AGENT or ADMIN (or clear assignment with null). Existing staff title/description editing remains available. Only ADMINs delete tickets.
+
+Status changes by staff allow exactly `OPEN → IN_PROGRESS`, `IN_PROGRESS → RESOLVED`, `RESOLVED → CLOSED`, and `RESOLVED → OPEN`. All other requested transitions, including sending the current status again, return 400 `BAD_REQUEST`. USER field/status restrictions return 403. Updates lock the ticket row in a transaction so concurrent changes validate against its latest status, and rejected combined updates change no fields. State-changing requests require the CSRF header described above.

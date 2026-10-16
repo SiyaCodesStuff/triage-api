@@ -162,6 +162,8 @@ export const openApiDocument = {
       patch: {
         parameters: [{ $ref: "#/components/parameters/csrfProtection" }],
         summary: "Update a ticket",
+        description:
+          "USER: own OPEN tickets, title/description only; foreign tickets return 404. AGENT/ADMIN: all tickets, status/priority and assignment to staff. Status transitions: OPEN -> IN_PROGRESS -> RESOLVED -> CLOSED; RESOLVED -> OPEN also allowed. Other transitions, including unchanged status, return 400.",
         security: [{ accessCookie: [] }, { bearerAuth: [] }],
         responses: { "200": { description: "Updated ticket" } },
       },

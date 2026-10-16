@@ -6,6 +6,7 @@ export default defineConfig({
     include: [
       "src/tests/database.test.ts",
       "src/tests/users.integration.test.ts",
+      "src/tests/tickets.integration.test.ts",
     ],
     setupFiles: ["./src/tests/integration.setup.ts"],
     clearMocks: true,
