@@ -13,7 +13,7 @@ describe("triage-api database flows", () => {
   let registrationCookies: string[] = [];
 
   beforeAll(async () => {
-    const response = await api.post("/api/auth/register").send({
+    const response = await api.post("/api/v1/auth/register").send({
       name: "API Test User",
       email,
       password: "correct horse battery staple",
@@ -35,7 +35,10 @@ describe("triage-api database flows", () => {
   });
 
   it("keeps credentials out of responses and supports ticket comments", async () => {
-    const currentUser = await api.get("/api/users/me");
+    const refreshed = await api.post("/api/v1/auth/refresh").send({});
+    expect(refreshed.status).toBe(200);
+
+    const currentUser = await api.get("/api/v1/users/me");
     expect(currentUser.status).toBe(200);
     expect(currentUser.body.data).not.toHaveProperty("passwordHash");
     expect(currentUser.body.data).not.toHaveProperty("accessToken");
@@ -44,7 +47,7 @@ describe("triage-api database flows", () => {
       expect.arrayContaining([expect.stringContaining("HttpOnly")]),
     );
 
-    const created = await api.post("/api/tickets").send({
+    const created = await api.post("/api/v1/tickets").send({
       title: "Cannot access student portal",
       description: "The portal returns an error after sign in.",
       priority: "HIGH",
@@ -52,19 +55,26 @@ describe("triage-api database flows", () => {
     expect(created.status).toBe(201);
     ticketId = created.body.data.id as string;
 
-    const forbiddenUpdate = await api.patch(`/api/tickets/${ticketId}`).send({
-      status: "RESOLVED",
-    });
+    const forbiddenUpdate = await api
+      .patch(`/api/v1/tickets/${ticketId}`)
+      .send({
+        status: "RESOLVED",
+      });
     expect(forbiddenUpdate.status).toBe(403);
 
     const comment = await api
-      .post(`/api/tickets/${ticketId}/comments`)
+      .post(`/api/v1/tickets/${ticketId}/comments`)
       .send({ body: "I can provide a screenshot." });
     expect(comment.status).toBe(201);
 
-    const comments = await api.get(`/api/tickets/${ticketId}/comments`);
+    const comments = await api.get(`/api/v1/tickets/${ticketId}/comments`);
     expect(comments.status).toBe(200);
     expect(comments.body.data.total).toBe(1);
     expect(comments.body.data.data[0].author.id).toBe(userId);
+
+    const logout = await api.post("/api/v1/auth/logout").send({});
+    expect(logout.status).toBe(204);
+    const afterLogout = await api.get("/api/v1/users/me");
+    expect(afterLogout.status).toBe(401);
   });
 });
