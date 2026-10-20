@@ -305,6 +305,35 @@ See [SECURITY.md](SECURITY.md) for controls and known limitations. Refresh-sessi
 
 ## Docker usage and image size
 
+### Pull a published image
+
+The [publish workflow](.github/workflows/publish-image.yml) runs on pushed `v*`
+tags and requires a stable release tag in `vMAJOR.MINOR.PATCH` format. For example,
+`v1.2.3` builds the root Dockerfile and pushes `1.2.3`, `1.2`, and `latest` to
+`ghcr.io/<owner>/<repo>`, with the owner and repository lowercased. The latter
+two tags move to the most recently published release, including when publishing
+an older release line. Prerelease and malformed tags fail before publishing.
+
+After a successful publish, pull the desired tag (replace `1.2.3` with a published
+version; adjust the owner/repository for a fork):
+
+```sh
+docker pull ghcr.io/siyacodesstuff/triage-api:1.2.3
+# Alternatively, track a release line or the most recently published release:
+docker pull ghcr.io/siyacodesstuff/triage-api:1.2
+docker pull ghcr.io/siyacodesstuff/triage-api:latest
+```
+
+Anonymous pulls require the GHCR package visibility to be public. For a private
+package, authenticate locally with an account authorized to read that package.
+Publishing uses only the built-in `GITHUB_TOKEN`, with `contents: read` and
+`packages: write`; no additional repository secrets are needed. The workflow
+uses pinned action commits, GitHub Actions layer caching, and OCI source,
+version, and MIT licence labels. Runtime database/JWT settings and one-shot
+migrations are still required as described below.
+
+### Build and run locally
+
 The Dockerfile has `deps → build → runtime` stages on Node 24 Debian slim. The runtime contains compiled JavaScript, production dependencies and migrations. It runs as the non-root `node` user, starts Node directly and checks `/health` with Node fetch. `.dockerignore` excludes `.env`, `.env.*`, local dependencies, tests and coverage from the build context.
 
 ```sh
